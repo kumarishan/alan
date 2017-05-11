@@ -1,0 +1,6 @@
+apply plugin: 'application'
+mainClassName = 'markov.services.sm.Main'
+
+dependencies {
+  compile 'joda-time:joda-time:2.9.5'
+}
