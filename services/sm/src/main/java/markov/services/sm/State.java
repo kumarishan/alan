@@ -20,7 +20,7 @@ public final class State<S, SC> {
   private final ContextDeserializer<SC> deserializer;
 
   private State(S name, SC context, ContextFactory<SC> contextFactory, Map<Class<?>, List<Transition>> transitionMap,
-                State.ContextSerializer<SC> serializer, State.ContextDeserializer<SC> deserializer) {
+                ContextSerializer<SC> serializer, ContextDeserializer<SC> deserializer) {
     this.name = name;
     this.context = context;
     this.contextFactory = contextFactory;
@@ -30,7 +30,7 @@ public final class State<S, SC> {
   }
 
   public State(S name, ContextFactory<SC> contextFactory,
-               State.ContextSerializer<SC> serializer, State.ContextDeserializer<SC> deserializer) {
+               ContextSerializer<SC> serializer, ContextDeserializer<SC> deserializer) {
     this(name, null, contextFactory, new HashMap<>(), serializer, deserializer);
   }
 
@@ -196,7 +196,7 @@ public final class State<S, SC> {
      * @param  context [description]
      * @return         [description]
      */
-    public boolean check(E event, Context<SC, SMC> context) {
+    public boolean check(E event, StateMachineDef.Context<SC, SMC> context) {
       return (this.predicate == null ? true : this.predicate.apply(event, context));
     }
   }
@@ -204,30 +204,15 @@ public final class State<S, SC> {
   /**
    *
    */
-  public static interface Predicate<E, D, S> {
-    public boolean apply(E event, Context<D, S> context);
+  public static interface Predicate<E, SC, SMC> {
+    public boolean apply(E event, StateMachineDef.Context<SC, SMC> context);
   }
 
   /**
    *
    */
-  public static interface Action<E, D, S> {
-    public TransitionAction apply(E event, Context<D, S> context);
-  }
-
-  /**
-   *
-   */
-  public static interface ContextFactory<SC> {
-    public SC apply();
-  }
-
-  public static interface ContextSerializer<SC> {
-    public byte[] apply(SC context);
-  }
-
-  public static interface ContextDeserializer<SC> {
-    public SC apply(byte[] binary);
+  public static interface Action<E, SC, SMC> {
+    public TransitionAction apply(E event, StateMachineDef.Context<SC, SMC> context) throws Exception;
   }
 
 }

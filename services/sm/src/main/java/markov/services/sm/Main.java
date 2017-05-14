@@ -1,68 +1,128 @@
 package markov.services.sm;
 
-class EventOne {}
-class StateOneData {};
-class StateTwoData {};
-class StateThreeData {};
+import static markov.services.sm.MyFSM.State.*;
+import static markov.services.sm.MyFSM.State;
+import static markov.services.sm.MyFSM.*;
 
-class StateOne extends State<StateOneData> {
-  public StateOne() {
-    setData(new StateOneData());
+
+/**
+ *
+ */
+class MyFSM extends StateMachineDef<MyFSM.State, MyFSMContext> {
+
+  static enum State {
+    StateOne, StateTwo, Success, Failure
   }
-}
 
-class StateTwo extends State<StateTwoData> {
-  public StateTwo() {
-    setData(new StateTwoData());
-  }
-}
+  static class EventOne {}
+  static class EventTwo {}
 
+  static class StateOneContext {};
+  static class StateTwoContext {};
+  static class ErrorContext {};
+  static class SuccessContext {};
 
-class MyFSMData {}
+  static class MyFSMContext {}
 
-class MyExecutionId implements ExecutionId {}
+  static class MyExecutionId implements ExecutionId {}
 
-class MyFSM extends StateMachine<MyFSMData> {
   {
-    when(new StateOne())
+    // State definitions
+    // - statename, preferrable enum, string or an immutable singletons
+    // - optinal state context with factories, serializers, deserializers
+    // - transitions
+    //   - Event, Predicate(optinal) -> Action
+    //   - Action can mutate or reset state context
+    //   - Action should return TransitionActions like goTo, failTo, stay()
+
+    state(StateOne, () -> new StateOneContext(),
+          (context) -> new byte[1024],
+          (binary) -> new StateOneContext())
       .onEvent(EventOne.class).perform((event, context) -> {
           // do something
-          return goTo(StateTwo.class);
+          // reset state context
+          return goTo(StateOne);
       })
-      .onEvent(EventOne.class, (event, context) -> true).perform((event, context) -> {
+      .onEvent(EventOne.class,
+              (event, context) -> true).perform((event, context) -> {
           // do something
-          return goTo(StateTwo.class);
+          return goTo(StateTwo);
       });
 
+    state(StateTwo, () -> new StateTwoContext(),
+          (context) -> new byte[1024],
+          (binary) -> new StateTwoContext())
+      .onEvent(EventTwo.class).perform((event, context) -> {
+        // do something
+        return goTo(StateOne);
+      });
+
+    // always call after state is defined
+    start(StateOne);
+
+    // optional can define success stage
+    // allowing to mark execution stage as completed
+    // and therefore never receive further events
+    // can have multiple success state.
+    success(Success,
+            (successContext) -> new byte[1024],
+            (stateMachineContext) -> {
+      // do something
+      // optionally update statemachine context
+      return new SuccessContext();
+    });
+
+    // stages where u can only reach using
+    // failTo transition with the exception
+    // multiple failure stages
+    // once in failure state, the Execution stage is marked as terminated
+    // and failed
+    // wont receive further events
+    failure(Failure,
+            (errorContext) -> new byte[1024],
+            (stateMachineContext) -> {
+      // do something
+      return new ErrorContext();
+    });
+
+    // handler for exceptions from actions
+    uncaughtActionExceptionHandler(
+      (state, event, stateContext, stateMachineContext, exception) -> {
+        // handle exception
+        // or optional go to some failed state
+        // if no state change then the execution stage doesnot move forward
+        failTo(Failure);
+      }
+    );
+
+    stateMachineContext(() -> new MyFSMContext(),
+                        (context) -> new byte[1024],
+                        (binary) -> new MyFSMContext());
+
     executionIdFor(EventOne.class, (event) -> new MyExecutionId());
+    executionIdFor(EventTwo.class, (event) -> new MyExecutionId());
   }
+
 }
+
 
 public class Main {
   public static void main(String[] args) {
-    ExecutionStageStore exStore = new ExecutionStageStore();
-    StandardBehavior behavior = new StandardBehavior();
-    MyFSM fsm = new MyFSM();
-    fsm.setBehavior(behavior);
+    // EventJsonMappers serializers = new EventJsonMappers();
+    // serializers.add(EventOne.class, (event) -> "", (json) -> new EventOne())
+    //            .add(EventTwo.class, (event) -> "", (json) -> new EventTwo());
 
-    // Executing FSM
-    // 1. receive an event;
-    EventOne event1 = new EventOne();
-    // 2. get associated instance id
-    // depends on metadata from event and the state machine
-    ExecutionId executionId = fsm.createExecutionId(event1);
+    // MarkovConfig config = new MarkovConfig();
+    // Markov markov = new Markov(config);
 
-    // 3. get the execution context for the instance id;
-    ExecutionStage exStage = exStore.forId(executionId);
+    // MyFSM fsmOne = new MyFSM();
+    // MyFSM fsmTwo = new MyFSM();
 
-    // ExecutionStage newExStage =     // 6. get the new execution context
-    //   fsm.withExecutionStage(context) // 4. init fsm with the execution context
-    //      .receiveEvent(event1);         // 5. receive the event
+    // markov.add(fsmOne);
+    // markov.add(fsmTwo);
 
-    // 7. Persiste the execution context
+    // markov.start();
 
-
-    System.out.println("Hello! I am markov");
-    System.out.println(fsm.toString());
+    // System.out.println("Markov service started");
   }
 }

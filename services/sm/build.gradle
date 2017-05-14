@@ -1,6 +1,10 @@
 apply plugin: 'application'
 mainClassName = 'markov.services.sm.Main'
 
+compileJava {
+  options.compilerArgs << '-Xlint:unchecked'
+}
+
 dependencies {
   compile 'joda-time:joda-time:2.9.5'
 }
