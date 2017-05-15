@@ -27,6 +27,8 @@ class MyFSM extends StateMachineDef<MyFSM.State, MyFSMContext> {
   static class MyExecutionId implements ExecutionId {}
 
   {
+    id("my-fsm");
+
     // State definitions
     // - statename, preferrable enum, string or an immutable singletons
     // - optinal state context with factories, serializers, deserializers

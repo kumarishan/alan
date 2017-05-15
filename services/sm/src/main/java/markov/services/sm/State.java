@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.List;
 import java.util.LinkedList;
 import java.util.Set;
+import java.util.HashSet;
 
 // holds settings for a state
 // - statename
@@ -15,11 +16,15 @@ public final class State<S, SC> {
   private final S name;
   private final SC context;
   private final ContextFactory<SC> contextFactory;
-  private final Map<Class<?>, List<Transition>> transitionMap;
+  private final Map<Class<?>, List<Transition<?, SC, ?>>> transitionMap;
   private final ContextSerializer<SC> serializer;
   private final ContextDeserializer<SC> deserializer;
+  private final Set<Class<?>> eventTypes;
+  {
+    eventTypes = new HashSet<>();
+  }
 
-  private State(S name, SC context, ContextFactory<SC> contextFactory, Map<Class<?>, List<Transition>> transitionMap,
+  private State(S name, SC context, ContextFactory<SC> contextFactory, Map<Class<?>, List<Transition<?, SC, ?>>> transitionMap,
                 ContextSerializer<SC> serializer, ContextDeserializer<SC> deserializer) {
     this.name = name;
     this.context = context;
@@ -39,13 +44,24 @@ public final class State<S, SC> {
    * @param  eventType [description]
    * @return           [description]
    */
-  public <E> List<Transition> getTransitions(Class<E> eventType) {
+  @SuppressWarnings("unchecked")
+  public <E> List<Transition<E, SC, ?>> getTransitions(Class<E> eventType) {
     if (!handlesEvent(eventType)) return null;
-    return new LinkedList<>(transitionMap.get(eventType));
+    else {
+      List<Transition<E, SC, ?>> result = new LinkedList<>();
+      for (Transition<?, SC, ?> transition : transitionMap.get(eventType)) {
+        result.add((Transition<E, SC, ?>) transition);
+      }
+      return result;
+    }
   }
 
-  /**
-   * 
+  public Set<Class<?>> getEventTypes() {
+    return new HashSet<>(this.eventTypes);
+  }
+
+  /**s
+   *
    */
   public Set<Class<?>> getHandledEventTypes() {
     return transitionMap.keySet();
@@ -117,11 +133,12 @@ public final class State<S, SC> {
    * @return            [description]
    */
   private <E> void appendTransition(Class<E> eventType, Transition<E, SC, ?> transition) {
-    List<Transition> transitions = transitionMap.get(eventType);
+    List<Transition<?, SC, ?>> transitions = transitionMap.get(eventType);
     if (transitions == null) {
       transitions = new LinkedList<>();
       transitionMap.put(eventType, transitions);
     }
+    eventTypes.add(eventType);
     transitions.add(transition);
   }
 

@@ -64,22 +64,45 @@ interface UncaughtActionExceptionHandler<S, SMC> {
  */
 public abstract class StateMachineDef<S, SMC> {
 
+  private String id;
   private S startState;
   private UncaughtActionExceptionHandler<S, SMC> uncaughtActionExceptionHandler;
   private ContextFactory<SMC> stateMachineContextFactory;
   private ContextSerializer<SMC> stateMachineContextSerializer;
   private ContextDeserializer<SMC> stateMachineContextDeserializer;
+
   private Map<Class<?>, ExecutionIdFactory<?>> executionIdFactories;
   private Map<S, State<S, ?>> states;
   private Map<String, S> nameToState;
   private Map<S, SuccessHandler<SMC, ?>> successStates;
   private Map<S, FailureHandler<SMC, ?>> failureStates;
+  private Set<Class<?>> eventTypes;
   {
     executionIdFactories = new HashMap<>();
     states = new HashMap<>();
     nameToState = new HashMap<>();
     successStates = new HashMap<>();
     failureStates = new HashMap<>();
+    eventTypes = new HashSet<>();
+  }
+
+  /**
+   * [getId description]
+   * @return [description]
+   */
+  public String getId() {
+    return this.id;
+  }
+
+  /**
+   *
+   */
+  public Set<Class<?>> getEventTypes() {
+    Set<Class<?>> eventTypes = new HashSet<>();
+    for (Map.Entry<S, State<S, ?>> entry : states.entrySet()) {
+      eventTypes.addAll(entry.getValue().getEventTypes());
+    }
+    return eventTypes;
   }
 
   /**
@@ -112,6 +135,14 @@ public abstract class StateMachineDef<S, SMC> {
   }
 
   //////////////////////////////////// Definition helper methods ///////////////////////////////////////////////////
+
+  /**
+   * [id description]
+   * @param id [description]
+   */
+  protected void id(String id) {
+    this.id = id;
+  }
 
   /**
    * [executionIdFor description]
