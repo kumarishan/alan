@@ -1,5 +1,7 @@
 package markov.services.sm;
 
+import java.util.concurrent.ForkJoinPool;
+
 import static markov.services.sm.MyFSM.State.*;
 import static markov.services.sm.MyFSM.State;
 import static markov.services.sm.MyFSM.*;
@@ -29,6 +31,11 @@ class MyFSM extends StateMachineDef<MyFSM.State, MyFSMContext> {
   {
     id("my-fsm");
 
+    // to use executor service inside action for async computation
+    // the created service is accessible as context.executorService
+    // the service is created only once
+    executorServiceFactory(() -> new ForkJoinPool());
+
     // State definitions
     // - statename, preferrable enum, string or an immutable singletons
     // - optinal state context with factories, serializers, deserializers
@@ -43,6 +50,7 @@ class MyFSM extends StateMachineDef<MyFSM.State, MyFSMContext> {
       .onEvent(EventOne.class).perform((event, context) -> {
           // do something
           // reset state context
+          // use context.executorService for any async code
           return goTo(StateOne);
       })
       .onEvent(EventOne.class,

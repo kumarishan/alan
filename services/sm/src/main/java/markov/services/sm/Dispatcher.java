@@ -35,8 +35,8 @@ class Dispatcher {
    * @param stateMachineDef [description]
    * @param executor        [description]
    */
-  public void register(StateMachineDef<?, ?> stateMachineDef, StateMachineExecutor executor) {
-    this.subscribers.add(new StateMachineSubscriber(stateMachineDef, executor));
+  public void register(StateMachineExecutor<?, ?> executor) {
+    this.subscribers.add(new StateMachineSubscriber(executor));
   }
 
   /**
@@ -191,11 +191,9 @@ interface Subscriber {
  *
  */
 class StateMachineSubscriber implements Subscriber {
-  private final StateMachineDef<?, ?> stateMachineDef;
-  private final StateMachineExecutor executor;
+  private final StateMachineExecutor<?, ?> executor;
 
-  public StateMachineSubscriber(StateMachineDef<?, ?> stateMachineDef, StateMachineExecutor executor) {
-    this.stateMachineDef = stateMachineDef;
+  public StateMachineSubscriber(StateMachineExecutor<?, ?> executor) {
     this.executor = executor;
   }
 
@@ -204,14 +202,14 @@ class StateMachineSubscriber implements Subscriber {
    * @return [description]
    */
   public String getId() {
-    return this.stateMachineDef.getId();
+    return this.executor.getStateMachineId();
   }
 
   /**
    *
    */
   public Set<Class<?>> getEventTypes() {
-    return this.stateMachineDef.getEventTypes();
+    return this.executor.getEventTypes();
   }
 
   /**

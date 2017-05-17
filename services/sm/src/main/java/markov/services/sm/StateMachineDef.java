@@ -1,6 +1,7 @@
 package markov.services.sm;
 
 import java.util.*;
+import java.util.concurrent.ExecutorService;
 import java.io.Serializable;
 
 
@@ -59,6 +60,10 @@ interface UncaughtActionExceptionHandler<S, SMC> {
   public void handler(S state, Object event, Object stateContext, SMC stateMachineContext, Exception exception);
 }
 
+interface StateMachineExecutorServiceFactory {
+  public ExecutorService create();
+}
+
 /**
  * Sate Machine
  */
@@ -70,6 +75,7 @@ public abstract class StateMachineDef<S, SMC> {
   private ContextFactory<SMC> stateMachineContextFactory;
   private ContextSerializer<SMC> stateMachineContextSerializer;
   private ContextDeserializer<SMC> stateMachineContextDeserializer;
+  private StateMachineExecutorServiceFactory executorServiceFactory;
 
   private Map<Class<?>, ExecutionIdFactory<?>> executionIdFactories;
   private Map<S, State<S, ?>> states;
@@ -127,6 +133,14 @@ public abstract class StateMachineDef<S, SMC> {
   }
 
   /**
+   * [getExecutorService description]
+   * @return [description]
+   */
+  public ExecutorService createExecutorService() {
+    return this.executorServiceFactory.create();
+  }
+
+  /**
    * [getUncaughtActionExceptionHandler description]
    * @return [description]
    */
@@ -142,6 +156,14 @@ public abstract class StateMachineDef<S, SMC> {
    */
   protected void id(String id) {
     this.id = id;
+  }
+
+  /**
+   * [executorServiceFactory description]
+   * @param factory [description]
+   */
+  protected void executorServiceFactory(StateMachineExecutorServiceFactory factory) {
+    this.executorServiceFactory = factory;
   }
 
   /**
@@ -266,7 +288,7 @@ public abstract class StateMachineDef<S, SMC> {
     if (state == null)
       throw new IllegalArgumentException("Un registered state(" + stateName + "), it should be first defined using state(...)");
     SC context = state.deserializeContext(stateContextBinary);
-    return new Context<>(context, null);
+    return new Context<>(context, null, null);
   }
 
 
@@ -293,10 +315,12 @@ public abstract class StateMachineDef<S, SMC> {
   final static class Context<SC, SMC> {
     final SC stateContext;
     final SMC stateMachineContext;
+    final ExecutorService executorService;
 
-    Context(SC stateContext, SMC stateMachineContext) {
+    Context(SC stateContext, SMC stateMachineContext, ExecutorService executorService) {
       this.stateContext = stateContext;
       this.stateMachineContext = stateMachineContext;
+      this.executorService = executorService;
     }
   }
 
