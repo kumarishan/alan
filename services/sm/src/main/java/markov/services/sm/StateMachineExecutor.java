@@ -8,6 +8,8 @@ import java.util.concurrent.RecursiveAction;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 
 /**
@@ -31,17 +33,16 @@ public class StateMachineExecutor<S, SMC> {
   private final Object failureLock = new Object();
   private final LinkedBlockingQueue<ExecutionTask> taskQueue;
 
-  protected final StateMachineDef<S, SMC> stateMachineDef;
+  private final StateMachineDef<S, SMC> stateMachineDef;
   private int eventRetries = 3;
+  private int maxWaitForAction;
 
   // fork join pool for handling events, ie executing StateExecutionAction
-  protected final ForkJoinPool forkJoinPool;
+  private final ForkJoinPool forkJoinPool;
+  private final ScheduledThreadPoolExecutor scheduler;
 
   // executor service used by state machine internally if any
   protected final ExecutorService stateMachineExecutorService;
-
-  protected AtomicInteger numProcessing = new AtomicInteger(0);
-
 
   /**
    * [StateMachineExecutor description]
@@ -50,7 +51,7 @@ public class StateMachineExecutor<S, SMC> {
    * @param  failureThreshold [description]
    * @return                  [description]
    */
-  public StateMachineExecutor(StateMachineDef<S, SMC> stateMachineDef, int parallelism, int failureThreshold) {
+  public StateMachineExecutor(StateMachineDef<S, SMC> stateMachineDef, int parallelism, int failureThreshold, int maxWaitForAction) {
     if (parallelism <= 0 || parallelism > MAX_PARALLEL ||
         failureThreshold <= 0 || failureThreshold > MAX_FAILURE_THRESHOLD)
       throw new IllegalArgumentException();
@@ -63,6 +64,7 @@ public class StateMachineExecutor<S, SMC> {
                                         ForkJoinPool. defaultForkJoinWorkerThreadFactory,
                                         (t, e) -> {}, // TODO
                                         true); // true -> FIFO
+    this.scheduler = new ScheduledThreadPoolExecutor(parallelism); // [TODO]
     this.status = (-parallelism) | ((-failureThreshold) << FC_SHIFT);
   }
 
@@ -72,7 +74,7 @@ public class StateMachineExecutor<S, SMC> {
    * @return                 [description]
    */
   public StateMachineExecutor(StateMachineDef<S, SMC> stateMachineDef) {
-    this(stateMachineDef, Math.min(MAX_PARALLEL, Runtime.getRuntime().availableProcessors()), 10);
+    this(stateMachineDef, Math.min(MAX_PARALLEL, Runtime.getRuntime().availableProcessors()), 10, 60000);
   }
 
   /**
@@ -121,6 +123,20 @@ public class StateMachineExecutor<S, SMC> {
   private void notifyStateExecutionActionCompletion() {
     int s;
     do {} while (!U.compareAndSwapInt(this, STATUS_OFFSET, s = status, s & RESET_FC));
+  }
+
+  /**
+   * [watch description]
+   * @param future [description]
+   */
+  private void watch(CompletableFuture<ExecutionResult> future) {
+    scheduler.schedule(new Runnable() {
+      public void run() {
+        if (!future.isDone()) {
+          future.complete(ExecutionResult.FAILED_ACTION_TIMEOUT);
+        }
+      }
+    }, this.maxWaitForAction, TimeUnit.MILLISECONDS);
   }
 
   ///////////////////////////// Event Execution Methods ///////////////////////////////////////////
@@ -201,6 +217,18 @@ public class StateMachineExecutor<S, SMC> {
           !U.compareAndSwapInt(this, STATUS_OFFSET, s, s + FC_UNIT));
       }
     }
+  }
+
+  private final ExecutionLock getLock(ExecutionId id) {
+    return new ExecutionLock();
+  }
+
+  private final CompletableFuture<ExecutionStage<S>> getExecutionStage(ExecutionId id) {
+    return CompletableFuture.supplyAsync(() -> new ExecutionStage<>(null, null, null, false));
+  }
+
+  private final CompletableFuture<Boolean> persistExecutionStage(ExecutionStage stage) {
+    return CompletableFuture.supplyAsync(() -> true);
   }
 
   ////////////////////////////// Status Methods ////////////////////////////////////////////
@@ -293,10 +321,38 @@ public class StateMachineExecutor<S, SMC> {
       this.retries = retries;
     }
 
+    /**
+     * [decrement description]
+     * @return [description]
+     */
     public ExecutionTask decrement() {
       return new ExecutionTask(event, id, retries - 1);
     }
+  }
 
+  /**
+   * TODO
+   */
+  public static class ExecutionLock {
+
+    public CompletableFuture<ExecutionLock> acquire() {
+      return CompletableFuture.supplyAsync(() -> this);
+    }
+
+    public CompletableFuture<ExecutionLock> release() {
+      return CompletableFuture.supplyAsync(() -> this);
+    }
+
+    public boolean isLocked() {
+      return true;
+    }
+  }
+
+  /**
+   *
+   */
+  private static enum ExecutionResult {
+    SUCCESS, RETRY, FAILED_TO_PERSIST_NEXT_STAGE, FAILED_INCONSISTENT_LOCK, FAILED_ACTION_TIMEOUT;
   }
 
   /**
@@ -343,18 +399,69 @@ public class StateMachineExecutor<S, SMC> {
         executor.notifyStateExecutionActionCompletion();
         return;
       }
-      // TODO
-      // - acquire lock
-      // - get execution stage
-      // - run stage
-      // - persist stage
-      // - release lock
-      // finally re run the exeution
-      CompletableFuture.supplyAsync(() -> {
-        executor.tryRunExecution(this);
-        return true;
-      });
-    }
-  }
 
+      CompletableFuture<ExecutionResult> mainF =
+        executor.getLock(task.id).acquire()
+          .thenComposeAsync((lock) -> {
+            if (lock.isLocked())
+              return getAndRunExecutionStage(task, lock);
+            else
+              return CompletableFuture.completedFuture(ExecutionResult.RETRY);
+          }, executor.forkJoinPool);
+
+
+      mainF.thenAcceptAsync((success) -> {
+        switch (success) {
+          case RETRY:
+            executor.receive(task.decrement());
+            break;
+          case SUCCESS: break; // TODO
+          case FAILED_INCONSISTENT_LOCK: break; // TODO
+          case FAILED_TO_PERSIST_NEXT_STAGE: break; // TODO
+        }
+        executor.tryRunExecution(this);
+      }, executor.forkJoinPool);
+
+      executor.watch(mainF);
+    }
+
+    /**
+     * [getAndRunExecutionStage description]
+     * @param  task [description]
+     * @param  lock [description]
+     * @return      [description]
+     */
+    private CompletableFuture<ExecutionResult> getAndRunExecutionStage(ExecutionTask task, ExecutionLock lock) {
+      return executor.getExecutionStage(task.id) // 1. Get execution stage
+        .thenComposeAsync((stage) -> {
+          CompletableFuture<ExecutionResult> resultF;
+          if (stage != null) {
+            resultF = stage.run(executor.stateMachineDef, executor.stateMachineExecutorService) // 2.a Run the execution stage
+              .thenComposeAsync((nextStage) -> // IMP: always there will be a next stage
+                executor.persistExecutionStage(nextStage) // 2.a.x Persist the execution stage
+                        .thenApplyAsync((success) -> {
+                          if (success) return ExecutionResult.SUCCESS;  // mark the sucessfull completion
+                          else return ExecutionResult.FAILED_TO_PERSIST_NEXT_STAGE; // the execution is failed with inconsistent state
+                        }, executor.forkJoinPool)
+              , executor.forkJoinPool);
+          } else {  // 2.b If failed then retry
+            resultF = CompletableFuture.completedFuture(ExecutionResult.RETRY);
+          }
+          // return resultF;
+          // try release lock once the result is available
+          return resultF.thenComposeAsync((result) ->
+            lock.release().thenComposeAsync((releasedLock) -> {
+              if (releasedLock.isLocked())
+                return executor.persistExecutionStage(stage.failed()) // ???????
+                               .thenApply((whatever) -> ExecutionResult.FAILED_INCONSISTENT_LOCK); // un-released lock puts statemachine in
+                                                                 // inconsistent state.
+
+              return CompletableFuture.completedFuture(result);
+            }, executor.forkJoinPool)
+          , executor.forkJoinPool);
+        }, executor.forkJoinPool);
+    }
+
+
+  }
 }
