@@ -6,37 +6,42 @@ import java.util.List;
 import java.util.LinkedList;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.concurrent.CompletableFuture;
+import java.lang.reflect.Type;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.TypeVariable;
+import java.lang.reflect.WildcardType;
+import java.lang.reflect.GenericArrayType;
+import java.lang.reflect.Array;
 
 // holds settings for a state
 // - statename
 // - current stateContext
 // - [todo] transitions associated with the state
-public final class State<S, SC> {
+public class State<S, SC> {
 
   private final S name;
-  private final SC context;
+  private final Class<SC> contextType;
   private final ContextFactory<SC> contextFactory;
-  private final Map<Class<?>, List<Transition<?, SC, ?>>> transitionMap;
-  private final ContextSerializer<SC> serializer;
-  private final ContextDeserializer<SC> deserializer;
+  private final Map<Class<?>, List<Transition<S, ?, SC, ?>>> transitionMap;
   private final Set<Class<?>> eventTypes;
   {
     eventTypes = new HashSet<>();
   }
 
-  private State(S name, SC context, ContextFactory<SC> contextFactory, Map<Class<?>, List<Transition<?, SC, ?>>> transitionMap,
-                ContextSerializer<SC> serializer, ContextDeserializer<SC> deserializer) {
-    this.name = name;
-    this.context = context;
-    this.contextFactory = contextFactory;
-    this.transitionMap = transitionMap;
-    this.serializer = serializer;
-    this.deserializer = deserializer;
+  public State(S name, Class<SC> contextType, ContextFactory<SC> contextFactory) {
+    this(name, null, contextType, contextFactory, new HashMap<>());
   }
 
-  public State(S name, ContextFactory<SC> contextFactory,
-               ContextSerializer<SC> serializer, ContextDeserializer<SC> deserializer) {
-    this(name, null, contextFactory, new HashMap<>(), serializer, deserializer);
+  private State(S name, SC context, Class<SC> contextType, ContextFactory<SC> contextFactory, Map<Class<?>, List<Transition<S, ?, SC, ?>>> transitionMap) {
+    this.name = name;
+    this.contextType = contextType;
+    this.contextFactory = contextFactory;
+    this.transitionMap = transitionMap;
+  }
+
+  public State() {
+    this(null, null, null);
   }
 
   /**
@@ -45,17 +50,45 @@ public final class State<S, SC> {
    * @return           [description]
    */
   @SuppressWarnings("unchecked")
-  public <E> List<Transition<E, SC, ?>> getTransitions(Class<E> eventType) {
+  public <E, SMC> List<Transition<S, E, SC, SMC>> getTransitions(Class<E> eventType) {
     if (!handlesEvent(eventType)) return null;
     else {
-      List<Transition<E, SC, ?>> result = new LinkedList<>();
-      for (Transition<?, SC, ?> transition : transitionMap.get(eventType)) {
-        result.add((Transition<E, SC, ?>) transition);
+      List<Transition<S, E, SC, SMC>> result = new LinkedList<>();
+      for (Transition<S, ?, SC, ?> transition : transitionMap.get(eventType)) {
+        result.add((Transition<S, E, SC, SMC>) transition);
       }
       return result;
     }
   }
 
+  /**
+   * [validateContextType description]
+   * @param  context [description]
+   * @return         [description]
+   */
+  public boolean validateContextType(Object context) {
+    return contextType.isInstance(context);
+  }
+
+  /**
+   * [createContext description]
+   * @return [description]
+   */
+  public SC createContext() {
+    return contextFactory.apply();
+  }
+
+  /**
+   * [getContextType description]
+   * @return [description]
+   */
+  public Class<SC> getContextType() {
+    return contextType;
+  }
+
+  /**
+   * 
+   */
   public Set<Class<?>> getEventTypes() {
     return new HashSet<>(this.eventTypes);
   }
@@ -76,28 +109,11 @@ public final class State<S, SC> {
   }
 
   /**
-   * [getContext description]
-   * @return [description]
-   */
-  public SC getContext() {
-    return context;
-  }
-
-  /**
    * [getBuildr description]
    * @return [description]
    */
   public <SMC> Buildr<S, SC, SMC, Object> getBuildr() {
     return new Buildr<>(this);
-  }
-
-  /**
-   * [withContext description]
-   * @param  newContext [description]
-   * @return            [description]
-   */
-  public State<S, SC> withContext(SC newContext) {
-    return new State<>(this.name, newContext, this.contextFactory, this.transitionMap, this.serializer, this.deserializer);
   }
 
   /**
@@ -110,30 +126,13 @@ public final class State<S, SC> {
   }
 
   /**
-   * [deserializeContext description]
-   * @param  contextBinary [description]
-   * @return               [description]
-   */
-  public SC deserializeContext(byte[] contextBinary) {
-    return deserializer.apply(contextBinary);
-  }
-
-  /**
-   * [serializedContext description]
-   * @return [description]
-   */
-  public byte[] serializedContext() {
-    return serializer.apply(this.context);
-  }
-
-  /**
    * [appendTransition description]
    * @param  eventType  [description]
    * @param  transition [description]
    * @return            [description]
    */
-  private <E> void appendTransition(Class<E> eventType, Transition<E, SC, ?> transition) {
-    List<Transition<?, SC, ?>> transitions = transitionMap.get(eventType);
+  private <E> void appendTransition(Class<E> eventType, Transition<S, E, SC, ?> transition) {
+    List<Transition<S, ?, SC, ?>> transitions = transitionMap.get(eventType);
     if (transitions == null) {
       transitions = new LinkedList<>();
       transitionMap.put(eventType, transitions);
@@ -188,8 +187,19 @@ public final class State<S, SC> {
      * @param  action [description]
      * @return        [description]
      */
-    public Buildr<S, SC, SMC, Object> perform(Action<E, SC, SMC> action) {
-      Transition<E, SC, SMC> transition = new Transition<>(this.predicate, action);
+    public Buildr<S, SC, SMC, Object> perform(Action<S, E, SC, SMC> action) {
+      Transition<S, E, SC, SMC> transition = new Transition<>(this.predicate, action);
+      this.state.appendTransition(this.eventType, transition);
+      return new Buildr<>(state);
+    }
+
+    /**
+     * [perform description]
+     * @param  asyncAction [description]
+     * @return             [description]
+     */
+    public Buildr<S, SC, SMC, Object> performAsync(AsyncAction<S, E, SC, SMC> asyncAction) {
+      Transition<S, E, SC, SMC> transition = new Transition<>(this.predicate, asyncAction);
       this.state.appendTransition(this.eventType, transition);
       return new Buildr<>(state);
     }
@@ -198,13 +208,46 @@ public final class State<S, SC> {
   /**
    *
    */
-  public static class Transition<E, SC, SMC> {
-    Predicate<E, SC, SMC> predicate;
-    Action<E, SC, SMC> action;
+  public static class Transition<S, E, SC, SMC> {
+    private final Predicate<E, SC, SMC> predicate;
+    private final Action<S, E, SC, SMC> action;
+    private final AsyncAction<S, E, SC, SMC> asyncAction;
 
-    public Transition(Predicate<E, SC, SMC> predicate, Action<E, SC, SMC> action) {
+    public Transition(Predicate<E, SC, SMC> predicate, Action<S, E, SC, SMC> action) {
       this.predicate = predicate;
       this.action = action;
+      this.asyncAction = null;
+    }
+
+
+    public Transition(Predicate<E, SC, SMC> predicate, AsyncAction<S, E, SC, SMC> asyncAction) {
+      this.predicate = predicate;
+      this.asyncAction = asyncAction;
+      this.action = null;
+    }
+
+    /**
+     * [isAsync description]
+     * @return [description]
+     */
+    public boolean isAsync() {
+      return asyncAction != null;
+    }
+
+    /**
+     * [getAction description]
+     * @return [description]
+     */
+    public Action<S, E, SC, SMC> getAction() {
+      return action;
+    }
+
+    /**
+     * [getAsyncAction description]
+     * @return [description]
+     */
+    public AsyncAction<S, E, SC, SMC> getAsyncAction() {
+      return asyncAction;
     }
 
     /**
@@ -228,8 +271,44 @@ public final class State<S, SC> {
   /**
    *
    */
-  public static interface Action<E, SC, SMC> {
-    public TransitionAction apply(E event, StateMachineDef.Context<SC, SMC> context) throws Exception;
+  public static interface Action<S, E, SC, SMC> {
+    public To<S, ?> apply(E event, StateMachineDef.Context<SC, SMC> context) throws Throwable;
+  }
+
+  /**
+   *
+   */
+  public static interface AsyncAction<S, E, SC, SMC> {
+    public CompletableFuture<To<S, ?>> apply(E event, StateMachineDef.Context<SC, SMC> context) throws Throwable;
+  }
+
+  /**
+   *
+   */
+  public static class To<S, SC> {
+    private final S state;
+    private final SC context;
+
+    public To(S state, SC context) {
+      this.state = state;
+      this.context = context;
+    }
+
+    public To(S state) {
+      this(state, null);
+    }
+
+    public S getState() {
+      return state;
+    }
+
+    public SC getContext() {
+      return context;
+    }
+
+    public <SC1> To<S, SC1> override(SC1 context) {
+      return new To<>(state, context);
+    }
   }
 
 }

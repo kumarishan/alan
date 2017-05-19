@@ -8,33 +8,7 @@ import java.io.Serializable;
 /**
  *
  */
-interface TransitionAction {}
-
-/**
- *
- */
-class GoTo<S> implements TransitionAction {
-  S state;
-
-  public GoTo(S state) {
-    this.state = state;
-  }
-}
-
-/**
- *
- */
-class FailTo<S> implements TransitionAction {
-  S state;
-
-  public FailTo(S state) {
-    this.state = state;
-  }
-}
-
-/**
- *
- */
+@FunctionalInterface
 interface ContextFactory<SC> {
   public SC apply();
 }
@@ -42,6 +16,7 @@ interface ContextFactory<SC> {
 /**
  *
  */
+@FunctionalInterface
 interface ContextSerializer<SC> {
   public byte[] apply(SC context);
 }
@@ -49,6 +24,7 @@ interface ContextSerializer<SC> {
 /**
  *
  */
+@FunctionalInterface
 interface ContextDeserializer<SC> {
   public SC apply(byte[] binary);
 }
@@ -56,10 +32,15 @@ interface ContextDeserializer<SC> {
 /**
  *
  */
+@FunctionalInterface
 interface UncaughtActionExceptionHandler<S, SMC> {
-  public void handler(S state, Object event, Object stateContext, SMC stateMachineContext, Exception exception);
+  public State.To<S, ?> handle(S state, Object event, StateMachineDef.Context<?, SMC> context, Throwable exception);
 }
 
+/**
+ *
+ */
+@FunctionalInterface
 interface StateMachineExecutorServiceFactory {
   public ExecutorService create();
 }
@@ -73,10 +54,12 @@ public abstract class StateMachineDef<S, SMC> {
   private S startState;
   private UncaughtActionExceptionHandler<S, SMC> uncaughtActionExceptionHandler;
   private ContextFactory<SMC> stateMachineContextFactory;
+  private StateMachineExecutorServiceFactory executorServiceFactory;
   private ContextSerializer<SMC> stateMachineContextSerializer;
   private ContextDeserializer<SMC> stateMachineContextDeserializer;
-  private StateMachineExecutorServiceFactory executorServiceFactory;
 
+  private Map<Class<?>, ContextSerializer<?>> serializers;
+  private Map<Class<?>, ContextDeserializer<?>> deserializers;
   private Map<Class<?>, ExecutionIdFactory<?>> executionIdFactories;
   private Map<S, State<S, ?>> states;
   private Map<String, S> nameToState;
@@ -90,6 +73,8 @@ public abstract class StateMachineDef<S, SMC> {
     successStates = new HashMap<>();
     failureStates = new HashMap<>();
     eventTypes = new HashSet<>();
+    serializers = new HashMap<>();
+    deserializers = new HashMap<>();
   }
 
   /**
@@ -133,6 +118,46 @@ public abstract class StateMachineDef<S, SMC> {
   }
 
   /**
+   * [getStartContext description]
+   * @return [description]
+   */
+  public StateMachineDef.Context<?, SMC> getStartContext() {
+    return _getStartContext();
+  }
+
+  // wild card capture
+  private <SC> StateMachineDef.Context<SC, SMC> _getStartContext() {
+    @SuppressWarnings("unchecked")
+    State<S, SC> state = (State<S, SC>)states.get(getStartState());
+    SC stateContext = state.createContext();
+    SMC stateMachineContext = stateMachineContextFactory.apply();
+    return new StateMachineDef.Context<>(stateContext, stateMachineContext, null);
+  }
+
+  /**
+   * [getTransition description]
+   * @param  stateName [description]
+   * @param  event     [description]
+   * @param  context   [description]
+   * @return           [description]
+   */
+  public <E, SC> State.Transition<S, E, SC, SMC> getTransition(S stateName, E event, StateMachineDef.Context<SC, SMC> context) {
+    @SuppressWarnings("unchecked")
+    State<S, SC> state = (State<S, SC>) states.get(stateName);
+    @SuppressWarnings("unchecked")
+    List<State.Transition<S, E, SC, SMC>> transitions = state.getTransitions((Class<E>)event.getClass());
+    State.Transition<S, E, SC, SMC> transition = null;
+
+    for (State.Transition<S, E, SC, SMC> trn : transitions) {
+      if (trn.check(event, context)) {
+        trn = transition;
+        break;
+      }
+    }
+    return transition;
+  }
+
+  /**
    * [getExecutorService description]
    * @return [description]
    */
@@ -146,6 +171,23 @@ public abstract class StateMachineDef<S, SMC> {
    */
   public UncaughtActionExceptionHandler<S, SMC> getUncaughtActionExceptionHandler() {
     return this.uncaughtActionExceptionHandler;
+  }
+
+  /**
+   *
+   */
+  public State<S, ?> getState(S name) {
+    return states.get(name);
+  }
+
+  /**
+   * [validateContextType description]
+   * @param  name    [description]
+   * @param  context [description]
+   * @return         [description]
+   */
+  public final <SC1> boolean validateContextType(S name, SC1 context) {
+    return states.get(name).validateContextType(context);
   }
 
   //////////////////////////////////// Definition helper methods ///////////////////////////////////////////////////
@@ -181,15 +223,16 @@ public abstract class StateMachineDef<S, SMC> {
    * @param  buildr.forState(state [description]
    * @return                       [description]
    */
-  protected <SC> State.Buildr<S, SC, SMC, Object> state(S name, ContextFactory<SC> contextFactory,
-                                                        ContextSerializer<SC> serializer,
-                                                        ContextDeserializer<SC> deserializer) {
+  protected <SC> State.Buildr<S, SC, SMC, Object> state(S name, Class<SC> contextType, ContextFactory<SC> contextFactory) {
     if (states.containsKey(name))
       throw new IllegalArgumentException(name + " already defined once, use the same instance using state(name)");
 
-    State<S, SC> state = new State<S, SC>(name, contextFactory, serializer, deserializer);
+    State<S, SC> state = new State<S, SC>(name, contextType, contextFactory);
     states.put(name, state);
-    nameToState.put(name.toString(), name);
+    if (name.getClass().isEnum())
+      nameToState.put(name.toString(), name);
+    else
+      nameToState.put(name.getClass().getName(), name);
     return state.getBuildr();
   }
 
@@ -211,7 +254,7 @@ public abstract class StateMachineDef<S, SMC> {
    * @param  handler    [description]
    * @return            [description]
    */
-  protected <SC> void success(S name, ContextSerializer<SC> serializer, SuccessHandler<SMC, SC> handler) {
+  protected <SC> void success(S name, Class<SC> contextType, ContextSerializer<SC> serializer, SuccessHandler<SMC, SC> handler) {
     this.successStates.put(name, handler);
   }
 
@@ -222,7 +265,7 @@ public abstract class StateMachineDef<S, SMC> {
    * @param  handler    [description]
    * @return            [description]
    */
-  protected <EC> void failure(S name, ContextSerializer<EC> serializer, FailureHandler<SMC, EC> handler) {
+  protected <EC> void failure(S name, Class<EC> contextType, ContextSerializer<EC> serializer, FailureHandler<SMC, EC> handler) {
     this.failureStates.put(name, handler);
   }
 
@@ -240,7 +283,7 @@ public abstract class StateMachineDef<S, SMC> {
    * @param serializer   [description]
    * @param deserializer [description]
    */
-  public void stateMachineContext(ContextFactory<SMC> factory, ContextSerializer<SMC> serializer, ContextDeserializer<SMC> deserializer) {
+  public void stateMachineContextFactory(ContextFactory<SMC> factory, ContextSerializer<SMC> serializer, ContextDeserializer<SMC> deserializer) {
     this.stateMachineContextFactory = factory;
     this.stateMachineContextSerializer = serializer;
     this.stateMachineContextDeserializer = deserializer;
@@ -251,8 +294,8 @@ public abstract class StateMachineDef<S, SMC> {
    * @param  stateType [description]
    * @return           [description]
    */
-  protected GoTo<S> goTo(S state) {
-    return new GoTo<>(state);
+  protected final State.To<S, ?> goTo(S state) {
+    return new State.To<>(state);
   }
 
   /**
@@ -260,8 +303,20 @@ public abstract class StateMachineDef<S, SMC> {
    * @param  state [description]
    * @return       [description]
    */
-  protected FailTo<S> failTo(S state) {
-    return new FailTo<>(state);
+  protected final State.To<S, ?> failTo(S state) {
+    return new State.To<>(state);
+  }
+
+  /**
+   * [serde description]
+   * @param  clazz        [description]
+   * @param  serializer   [description]
+   * @param  deserializer [description]
+   * @return              [description]
+   */
+  protected final <T> void serde(Class<T> clazz, ContextSerializer<T> serializer, ContextDeserializer<T> deserializer) {
+    serializers.put(clazz, serializer);
+    deserializers.put(clazz, deserializer);
   }
 
   ///////////// Context Serialization Deserialization ///////////
@@ -287,8 +342,10 @@ public abstract class StateMachineDef<S, SMC> {
     State<S, SC> state = (State<S, SC>) states.get(stateName);
     if (state == null)
       throw new IllegalArgumentException("Un registered state(" + stateName + "), it should be first defined using state(...)");
-    SC context = state.deserializeContext(stateContextBinary);
-    return new Context<>(context, null, null);
+    @SuppressWarnings("unchecked")
+    SC context = ((ContextDeserializer<SC>)deserializers.get(state.getContextType())).apply(stateContextBinary);
+    SMC stateMachineContext = stateMachineContextDeserializer.apply(stateMachineContextBinary);
+    return new Context<>(context, stateMachineContext, null);
   }
 
 
@@ -321,6 +378,21 @@ public abstract class StateMachineDef<S, SMC> {
       this.stateContext = stateContext;
       this.stateMachineContext = stateMachineContext;
       this.executorService = executorService;
+    }
+
+    Context(SC stateContext, SMC stateMachineContext) {
+      this.stateContext = stateContext;
+      this.stateMachineContext = stateMachineContext;
+      this.executorService = null;
+    }
+
+    /**
+     * [withExecutorService description]
+     * @param  service [description]
+     * @return         [description]
+     */
+    public Context<SC, SMC> withExecutorService(ExecutorService service) {
+      return new Context<>(stateContext, stateMachineContext, service);
     }
   }
 
