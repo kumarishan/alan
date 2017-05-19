@@ -74,15 +74,16 @@ class ExecutionStage<S, SC, SMC> {
       if (!transition.isAsync()) { // sync action
         State.To<S, ?> to;
         try {
-          to  = transition.getAction().apply(event, context.copy(executorService));
+          to = transition.getAction().apply(event, context.copy(executorService));
         } catch (Throwable ex) {
-          to = stateMachineDef.getUncaughtActionExceptionHandler().handle(currentState, event, context, ex);
+          to = stateMachineDef.getRuntimeExceptionHandler().handle(currentState, event, context, ex);
         }
+        // check to intanceof State.Terminate<S>
         return createNextExecutionStage(to, event);
       } else { // async action
         return transition.getAsyncAction().apply(event, context.copy(executorService))
           .exceptionally((exception) ->
-            stateMachineDef.getUncaughtActionExceptionHandler().handle(currentState, event, context, exception))
+            stateMachineDef.getRuntimeExceptionHandler().handle(currentState, event, context, exception))
           .thenComposeAsync((to) -> createNextExecutionStage(to, event), executorService);
       }
     } else {
@@ -99,15 +100,15 @@ class ExecutionStage<S, SC, SMC> {
    */
   @SuppressWarnings("unchecked")
   private <E> CompletableFuture<ExecutionStage<S, ?, SMC>> createNextExecutionStage(State.To<S, ?> to, E event) {
-    if (to.getContext() != null && !stateMachineDef.validateContextType(to.getState(), to.getContext())) {
-      return failedFuture(new InvalidStateTransitionException("Context type " + to.getContext().getClass().getName()
+    if (to.getContextOverride() != null && !stateMachineDef.validateContextType(to.getState(), to.getContextOverride())) {
+      return failedFuture(new InvalidStateTransitionException("Context type " + to.getContextOverride().getClass().getName()
                                    + " doesnot match the target state " + to.getState() + "'s context"));
     }
 
     StateMachineDef.Context<SC, SMC> targetContext = null;
 
-    if (to.getContext() != null) {
-      targetContext = new StateMachineDef.Context<SC, SMC>((SC) to.getContext(), context.stateMachineContext);
+    if (to.getContextOverride() != null) {
+      targetContext = new StateMachineDef.Context<SC, SMC>((SC) to.getContextOverride(), context.stateMachineContext);
     } else {
       targetContext = new StateMachineDef.Context<SC, SMC>(null, context.stateMachineContext);
     }

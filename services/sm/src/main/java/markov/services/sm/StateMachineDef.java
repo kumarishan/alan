@@ -2,16 +2,13 @@ package markov.services.sm;
 
 import java.util.*;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ForkJoinPool;
 import java.io.Serializable;
+import java.util.function.Supplier;
+import java.util.function.Function;
+import java.util.function.BiFunction;
+import java.util.concurrent.CompletableFuture;
 
-
-/**
- *
- */
-@FunctionalInterface
-interface ContextFactory<SC> {
-  public SC apply();
-}
 
 /**
  *
@@ -33,56 +30,45 @@ interface ContextDeserializer<SC> {
  *
  */
 @FunctionalInterface
-interface UncaughtActionExceptionHandler<S, SMC> {
+interface RuntimeExceptionHandler<S, SMC> {
   public State.To<S, ?> handle(S state, Object event, StateMachineDef.Context<?, SMC> context, Throwable exception);
 }
 
 /**
- *
- */
-@FunctionalInterface
-interface StateMachineExecutorServiceFactory {
-  public ExecutorService create();
-}
-
-/**
- *
- */
-@FunctionalInterface
-interface ExecutionIdFactory<E> {
-  public ExecutionId apply(E event);
-}
-
-/**
  * Sate Machine
+ * @Immutable
  */
 public abstract class StateMachineDef<S, SMC> {
 
   private String id;
   private S startState;
-  private UncaughtActionExceptionHandler<S, SMC> uncaughtActionExceptionHandler;
-  private ContextFactory<SMC> stateMachineContextFactory;
-  private StateMachineExecutorServiceFactory executorServiceFactory;
+  private RuntimeExceptionHandler<S, SMC> runtimeExceptionHandler;
+  private Supplier<SMC> stateMachineContextFactory;
+  private Supplier<ExecutorService> executorServiceFactory;
   private ContextSerializer<SMC> stateMachineContextSerializer;
   private ContextDeserializer<SMC> stateMachineContextDeserializer;
+  private Class<SMC> stateMachineContextType;
 
-  private Map<Class<?>, ContextSerializer<?>> serializers;
-  private Map<Class<?>, ContextDeserializer<?>> deserializers;
-  private Map<Class<?>, ExecutionIdFactory<?>> executionIdFactories;
-  private Map<S, State<S, ?>> states;
-  private Map<String, S> nameToState;
-  private Map<S, SuccessHandler<SMC, ?>> successStates;
-  private Map<S, FailureHandler<SMC, ?>> failureStates;
-  private Set<Class<?>> eventTypes;
+  private final Map<Class<?>, Function<?, ExecutionId>> executionIdFactories;
+  private final Map<S, State<S, ?>> states;
+  private final Map<S, SinkState<S, SMC, ?>> sinkStates;
+  private final Map<String, S> nameToState;
+  private final Set<Class<?>> eventTypes;
+  private final Map<Class<?>, ContextSerializer<?>> serializers;
+  private final Map<Class<?>, ContextDeserializer<?>> deserializers;
   {
     executionIdFactories = new HashMap<>();
-    states = new HashMap<>();
-    nameToState = new HashMap<>();
-    successStates = new HashMap<>();
-    failureStates = new HashMap<>();
-    eventTypes = new HashSet<>();
-    serializers = new HashMap<>();
-    deserializers = new HashMap<>();
+    states               = new HashMap<>();
+    nameToState          = new HashMap<>();
+    sinkStates           = new HashMap<>();
+    eventTypes           = new HashSet<>();
+    serializers          = new HashMap<>();
+    deserializers        = new HashMap<>();
+
+    // defaults
+    // default serde using jackson...
+    executorServiceFactory = () -> ForkJoinPool.commonPool();
+    runtimeExceptionHandler = (S state, Object event, StateMachineDef.Context<?, SMC> context, Throwable exception) -> stop(exception);
   }
 
   /**
@@ -111,7 +97,7 @@ public abstract class StateMachineDef<S, SMC> {
    */
   public <E> ExecutionId getExecutionId(E event) {
     @SuppressWarnings("unchecked")
-    ExecutionIdFactory<E> factory = (ExecutionIdFactory<E>) executionIdFactories.get(event.getClass());
+    Function<E, ExecutionId> factory = (Function<E, ExecutionId>) executionIdFactories.get(event.getClass());
     if (factory == null)
       throw new NullPointerException("No factory method specified to create execution id for the event " + event.getClass().getName());
     return factory.apply(event);
@@ -138,7 +124,7 @@ public abstract class StateMachineDef<S, SMC> {
     @SuppressWarnings("unchecked")
     State<S, SC> state = (State<S, SC>)states.get(getStartState());
     SC stateContext = state.createContext();
-    SMC stateMachineContext = stateMachineContextFactory.apply();
+    SMC stateMachineContext = stateMachineContextFactory.get();
     return new StateMachineDef.Context<>(stateContext, stateMachineContext, null);
   }
 
@@ -170,15 +156,15 @@ public abstract class StateMachineDef<S, SMC> {
    * @return [description]
    */
   public ExecutorService createExecutorService() {
-    return this.executorServiceFactory.create();
+    return this.executorServiceFactory.get();
   }
 
   /**
-   * [getUncaughtActionExceptionHandler description]
+   * [getRuntimeExceptionHandler description]
    * @return [description]
    */
-  public UncaughtActionExceptionHandler<S, SMC> getUncaughtActionExceptionHandler() {
-    return this.uncaughtActionExceptionHandler;
+  public RuntimeExceptionHandler<S, SMC> getRuntimeExceptionHandler() {
+    return this.runtimeExceptionHandler;
   }
 
   /**
@@ -212,7 +198,7 @@ public abstract class StateMachineDef<S, SMC> {
    * [executorServiceFactory description]
    * @param factory [description]
    */
-  protected void executorServiceFactory(StateMachineExecutorServiceFactory factory) {
+  protected void executorServiceFactory(Supplier<ExecutorService> factory) {
     this.executorServiceFactory = factory;
   }
 
@@ -222,7 +208,7 @@ public abstract class StateMachineDef<S, SMC> {
    * @param  factory   [description]
    * @return           [description]
    */
-  protected <E> void executionIdFor(Class<E> eventType, ExecutionIdFactory<E> factory) {
+  protected <E> void executionIdFor(Class<E> eventType, Function<E, ExecutionId> factory) {
     executionIdFactories.put(eventType, factory);
   }
 
@@ -231,16 +217,16 @@ public abstract class StateMachineDef<S, SMC> {
    * @param  buildr.forState(state [description]
    * @return                       [description]
    */
-  protected <SC> State.Buildr<S, SC, SMC, Object> state(S name, Class<SC> contextType, ContextFactory<SC> contextFactory) {
+  protected <SC> State.Buildr<S, SC, SMC, Object> state(S name, Class<SC> contextType, Supplier<SC> contextFactory) {
     if (states.containsKey(name))
-      throw new IllegalArgumentException(name + " already defined once, use the same instance using state(name)");
+      throw new IllegalArgumentException("State " + name + " already defined once, use the same instance using state(name)");
+
+    if (sinkStates.containsKey(name))
+      throw new IllegalArgumentException("State " + name + " is already defined as a sink state");
 
     State<S, SC> state = new State<S, SC>(name, contextType, contextFactory);
     states.put(name, state);
-    if (name.getClass().isEnum())
-      nameToState.put(name.toString(), name);
-    else
-      nameToState.put(name.getClass().getName(), name);
+    addToNameToState(name);
     return state.getBuildr();
   }
 
@@ -262,8 +248,25 @@ public abstract class StateMachineDef<S, SMC> {
    * @param  handler    [description]
    * @return            [description]
    */
-  protected <SC> void success(S name, Class<SC> contextType, ContextSerializer<SC> serializer, SuccessHandler<SMC, SC> handler) {
-    this.successStates.put(name, handler);
+  protected <SC> void success(S name, Class<SC> resultType, Function<SMC, SC> action) {
+    if (sinkStates.containsKey(name) || states.containsKey(name))
+      throw new IllegalArgumentException("State " + name + " is already defined, cannot use as new success state");
+    addToNameToState(name);
+    sinkStates.put(name, new SinkState<>(name, resultType, action, true));
+  }
+
+  /**
+   * [success description]
+   * @param  name       [description]
+   * @param  serializer [description]
+   * @param  handler    [description]
+   * @return            [description]
+   */
+  protected <SC> void successAsync(S name, Class<SC> resultType, BiFunction<SMC, ExecutorService, CompletableFuture<SC>> action) {
+    if (sinkStates.containsKey(name) || states.containsKey(name))
+      throw new IllegalArgumentException("State " + name + " is already defined, cannot use as new success state");
+    addToNameToState(name);
+    sinkStates.put(name, new SinkState<>(name, resultType, action, true));
   }
 
   /**
@@ -273,16 +276,33 @@ public abstract class StateMachineDef<S, SMC> {
    * @param  handler    [description]
    * @return            [description]
    */
-  protected <EC> void failure(S name, Class<EC> contextType, ContextSerializer<EC> serializer, FailureHandler<SMC, EC> handler) {
-    this.failureStates.put(name, handler);
+  protected <EC> void failure(S name, Class<EC> resultType, Function<SMC, EC> action) {
+    if (states.containsKey(name))
+      throw new IllegalArgumentException("State " + name + " is already defined, cannot use as new failure state");
+    addToNameToState(name);
+    sinkStates.put(name, new SinkState<>(name, resultType, action, false));
   }
 
   /**
-   * [uncaughtActionExceptionHandler description]
+   * [failure description]
+   * @param  name       [description]
+   * @param  serializer [description]
+   * @param  handler    [description]
+   * @return            [description]
+   */
+  protected <EC> void failureAsync(S name, Class<EC> resultType, BiFunction<SMC, ExecutorService, CompletableFuture<EC>> action) {
+    if (states.containsKey(name))
+      throw new IllegalArgumentException("State " + name + " is already defined, cannot use as new failure state");
+    addToNameToState(name);
+    sinkStates.put(name, new SinkState<>(name, resultType, action, false));
+  }
+
+  /**
+   * [runtimeExceptionHandler description]
    * @param handler [description]
    */
-  protected void uncaughtActionExceptionHandler(UncaughtActionExceptionHandler<S, SMC> handler) {
-    this.uncaughtActionExceptionHandler = handler;
+  protected void runtimeExceptionHandler(RuntimeExceptionHandler<S, SMC> handler) {
+    this.runtimeExceptionHandler = handler;
   }
 
   /**
@@ -291,10 +311,9 @@ public abstract class StateMachineDef<S, SMC> {
    * @param serializer   [description]
    * @param deserializer [description]
    */
-  public void stateMachineContextFactory(ContextFactory<SMC> factory, ContextSerializer<SMC> serializer, ContextDeserializer<SMC> deserializer) {
+  public void stateMachineContextFactory(Class<SMC> stateMachineContextType, Supplier<SMC> factory) {
+    this.stateMachineContextType = stateMachineContextType;
     this.stateMachineContextFactory = factory;
-    this.stateMachineContextSerializer = serializer;
-    this.stateMachineContextDeserializer = deserializer;
   }
 
   /**
@@ -316,6 +335,20 @@ public abstract class StateMachineDef<S, SMC> {
   }
 
   /**
+   *
+   */
+  protected final State.To<S, ?> stop() {
+    return new State.Stop<>();
+  }
+
+  /**
+   *
+   */
+  protected final State.To<S, ?> stop(Throwable exception) {
+    return new State.Stop<>(exception);
+  }
+
+  /**
    * [serde description]
    * @param  clazz        [description]
    * @param  serializer   [description]
@@ -325,6 +358,58 @@ public abstract class StateMachineDef<S, SMC> {
   protected final <T> void serde(Class<T> clazz, ContextSerializer<T> serializer, ContextDeserializer<T> deserializer) {
     serializers.put(clazz, serializer);
     deserializers.put(clazz, deserializer);
+  }
+
+  /**
+   * [verify description]
+   */
+  protected final void verify() {
+    if (this.id == null)
+      throw new IllegalArgumentException("State Machine id not specified");
+    checkStates();
+    checkStateMachineContext();
+    checkSinkStates();
+  }
+
+  /**
+   * [checkStates description]
+   */
+  private void checkStates() {
+    for (S name : states.keySet()) {
+      Class<?> contextType = states.get(name).getContextType();
+      if (!(serializers.containsKey(contextType) && deserializers.containsKey(contextType)))
+        throw new IllegalArgumentException("Serializers not defined for " + contextType.getName());
+      for (Class<?> eventType : states.get(name).getEventTypes()) {
+        if (!executionIdFactories.containsKey(eventType))
+          throw new IllegalArgumentException("No execution id factory for event type " + eventType.getName());
+      }
+    }
+  }
+
+  private void checkStateMachineContext() {
+    if (stateMachineContextFactory == null)
+      throw new IllegalArgumentException("State Machine context factory not defined");
+    if (!(serializers.containsKey(stateMachineContextType) && deserializers.containsKey(stateMachineContextType)))
+      throw new IllegalArgumentException("Serializers not defined for state machine context");
+  }
+
+  private void checkSinkStates() {
+    for (S name : sinkStates.keySet()) {
+      Class<?> resultType = sinkStates.get(name).getResultType();
+      if (!(serializers.containsKey(resultType) && deserializers.containsKey(resultType)))
+        throw new IllegalArgumentException("Serializers not defined for sink state result type " + resultType.getName());
+    }
+  }
+
+  /**
+   * [addToNameToState description]
+   * @param name [description]
+   */
+  private void addToNameToState(S name) {
+    if (name.getClass().isEnum())
+      nameToState.put(name.toString(), name);
+    else
+      nameToState.put(name.getClass().getName(), name);
   }
 
   ///////////// Context Serialization Deserialization ///////////
@@ -402,20 +487,6 @@ public abstract class StateMachineDef<S, SMC> {
     public Context<SC, SMC> copy(ExecutorService service) {
       return new Context<>(stateContext, stateMachineContext, service);
     }
-  }
-
-  /**
-   *
-   */
-  static interface SuccessHandler<SMC, SC> {
-    public SC handler(SMC context);
-  }
-
-  /**
-   *
-   */
-  static interface FailureHandler<SMC, EC> {
-    public EC handler(SMC context);
   }
 
 }

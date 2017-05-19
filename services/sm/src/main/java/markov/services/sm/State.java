@@ -7,33 +7,83 @@ import java.util.LinkedList;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.concurrent.CompletableFuture;
-import java.lang.reflect.Type;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.TypeVariable;
-import java.lang.reflect.WildcardType;
-import java.lang.reflect.GenericArrayType;
-import java.lang.reflect.Array;
+import java.util.function.Supplier;
+import java.util.function.Function;
+import java.util.function.BiFunction;
+import java.util.concurrent.ExecutorService;
 
-// holds settings for a state
-// - statename
-// - current stateContext
-// - [todo] transitions associated with the state
-public class State<S, SC> {
+
+/**
+ *
+ */
+class SinkState<S, SMC, R> {
+
+  private final S name;
+  private final Class<R> resultType;
+  private final BiFunction<SMC, ExecutorService, CompletableFuture<R>> asyncAction;
+  private final Function<SMC, R> action;
+  private final boolean isSuccess;
+
+  public SinkState(S name, Class<R> resultType, Function<SMC, R> action, boolean isSuccess) {
+    this.name = name;
+    this.resultType = resultType;
+    this.asyncAction = null;
+    this.action = action;
+    this.isSuccess = isSuccess;
+  }
+
+  public SinkState(S name, Class<R> resultType, BiFunction<SMC, ExecutorService, CompletableFuture<R>> asyncAction, boolean isSuccess) {
+    this.name = name;
+    this.resultType = resultType;
+    this.asyncAction = asyncAction;
+    this.action = null;
+    this.isSuccess = isSuccess;
+  }
+
+  /**
+   *
+   */
+  public Class<?> getResultType() {
+    return resultType;
+  }
+
+  /**
+   * [isSuccess description]
+   * @return [description]
+   */
+  public final boolean isSuccess() {
+    return isSuccess;
+  }
+
+  /**
+   * [isActionAsync description]
+   * @return [description]
+   */
+  public final boolean isActionAsync() {
+    return this.asyncAction != null;
+  }
+
+}
+
+/**
+ *
+ */
+class State<S, SC> {
 
   private final S name;
   private final Class<SC> contextType;
-  private final ContextFactory<SC> contextFactory;
+  private final Supplier<SC> contextFactory;
   private final Map<Class<?>, List<Transition<S, ?, SC, ?>>> transitionMap;
   private final Set<Class<?>> eventTypes;
   {
     eventTypes = new HashSet<>();
   }
 
-  public State(S name, Class<SC> contextType, ContextFactory<SC> contextFactory) {
+  public State(S name, Class<SC> contextType, Supplier<SC> contextFactory) {
     this(name, null, contextType, contextFactory, new HashMap<>());
   }
 
-  private State(S name, SC context, Class<SC> contextType, ContextFactory<SC> contextFactory, Map<Class<?>, List<Transition<S, ?, SC, ?>>> transitionMap) {
+  private State(S name, SC context, Class<SC> contextType, Supplier<SC> contextFactory, Map<Class<?>, List<Transition<S, ?, SC, ?>>> transitionMap) {
     this.name = name;
     this.contextType = contextType;
     this.contextFactory = contextFactory;
@@ -75,7 +125,7 @@ public class State<S, SC> {
    * @return [description]
    */
   public SC createContext() {
-    return contextFactory.apply();
+    return contextFactory.get();
   }
 
   /**
@@ -87,7 +137,7 @@ public class State<S, SC> {
   }
 
   /**
-   * 
+   *
    */
   public Set<Class<?>> getEventTypes() {
     return new HashSet<>(this.eventTypes);
@@ -264,6 +314,7 @@ public class State<S, SC> {
   /**
    *
    */
+  @FunctionalInterface
   public static interface Predicate<E, SC, SMC> {
     public boolean apply(E event, StateMachineDef.Context<SC, SMC> context);
   }
@@ -271,6 +322,7 @@ public class State<S, SC> {
   /**
    *
    */
+  @FunctionalInterface
   public static interface Action<S, E, SC, SMC> {
     public To<S, ?> apply(E event, StateMachineDef.Context<SC, SMC> context) throws Throwable;
   }
@@ -278,6 +330,7 @@ public class State<S, SC> {
   /**
    *
    */
+  @FunctionalInterface
   public static interface AsyncAction<S, E, SC, SMC> {
     public CompletableFuture<To<S, ?>> apply(E event, StateMachineDef.Context<SC, SMC> context);
   }
@@ -287,11 +340,11 @@ public class State<S, SC> {
    */
   public static class To<S, SC> {
     private final S state;
-    private final SC context;
+    private final SC contextOverride;
 
-    public To(S state, SC context) {
+    public To(S state, SC contextOverride) {
       this.state = state;
-      this.context = context;
+      this.contextOverride = contextOverride;
     }
 
     public To(S state) {
@@ -302,12 +355,29 @@ public class State<S, SC> {
       return state;
     }
 
-    public SC getContext() {
-      return context;
+    public SC getContextOverride() {
+      return contextOverride;
     }
 
     public <SC1> To<S, SC1> override(SC1 context) {
       return new To<>(state, context);
+    }
+  }
+
+  /**
+   *
+   */
+  public static class Stop<S> extends To<S, Object> {
+    private final Throwable exception;
+
+    public Stop() {
+      super(null, null);
+      this.exception = null;
+    }
+
+    public Stop(Throwable exception) {
+      super(null, null);
+      this.exception = exception;
     }
   }
 

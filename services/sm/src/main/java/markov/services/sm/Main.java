@@ -21,8 +21,8 @@ class MyFSM extends StateMachineDef<MyFSM.State, MyFSMContext> {
 
   static class StateOneContext {};
   static class StateTwoContext {};
-  static class ErrorContext {};
-  static class SuccessContext {};
+  static class ErrorResult {};
+  static class SuccessResult {};
 
   static class MyFSMContext {}
 
@@ -34,9 +34,7 @@ class MyFSM extends StateMachineDef<MyFSM.State, MyFSMContext> {
     executionIdFor(EventOne.class, (event) -> new MyExecutionId());
     executionIdFor(EventTwo.class, (event) -> new MyExecutionId());
 
-    stateMachineContextFactory(() -> new MyFSMContext(),
-      (context) -> new byte[1024],
-      (binary) -> new MyFSMContext());
+    stateMachineContextFactory(MyFSMContext.class, () -> new MyFSMContext());
 
     // to use executor service inside action for async computation
     // the created service is accessible as context.executorService
@@ -63,8 +61,12 @@ class MyFSM extends StateMachineDef<MyFSM.State, MyFSMContext> {
               (event, context) -> true).perform((event, context) -> {
           System.out.println(event.getClass().getName() + " - 2");
 
+          if (context == null) { // just a dummy code here :P
+            return stop(new Exception("Something unexpected happened"));
+          }
+
           // override the current state context
-          // of stateTwo
+          // of StateTwo
           // NOTE: at runtime it will type check
           // for next state and its context type
           return goTo(StateTwo).override(new StateTwoContext());
@@ -83,12 +85,10 @@ class MyFSM extends StateMachineDef<MyFSM.State, MyFSMContext> {
     // allowing to mark execution stage as completed
     // and therefore never receive further events
     // can have multiple success state.
-    success(Success, SuccessContext.class,
-            (successContext) -> new byte[1024],
-            (stateMachineContext) -> {
+    success(Success, SuccessResult.class, (stateMachineContext) -> {
       // do something
       // optionally update statemachine context
-      return new SuccessContext();
+      return new SuccessResult();
     });
 
     // stages where u can only reach using
@@ -97,15 +97,13 @@ class MyFSM extends StateMachineDef<MyFSM.State, MyFSMContext> {
     // once in failure state, the Execution stage is marked as terminated
     // and failed
     // wont receive further events
-    failure(Failure, ErrorContext.class,
-            (errorContext) -> new byte[1024],
-            (stateMachineContext) -> {
+    failure(Failure, ErrorResult.class, (stateMachineContext) -> {
       // do something
-      return new ErrorContext();
+      return new ErrorResult();
     });
 
     // handler for exceptions from actions
-    uncaughtActionExceptionHandler(
+    runtimeExceptionHandler(
       (state, event, context, exception) -> {
         // handle exception
         // or optional go to some failed state
@@ -116,6 +114,10 @@ class MyFSM extends StateMachineDef<MyFSM.State, MyFSMContext> {
     );
 
     // serializers
+    serde(MyFSMContext.class,
+      (context) -> new byte[1024],
+      (binary) -> new MyFSMContext());
+
     serde(StateOneContext.class,
       (context) -> new byte[1024],
       (binary) -> new StateOneContext());
@@ -123,6 +125,16 @@ class MyFSM extends StateMachineDef<MyFSM.State, MyFSMContext> {
     serde(StateTwoContext.class,
       (context) -> new byte[1024],
       (binary) -> new StateTwoContext());
+
+    serde(SuccessResult.class,
+      (context) -> new byte[1024],
+      (binary) -> new SuccessResult());
+
+    serde(ErrorResult.class,
+      (context) -> new byte[1024],
+      (binary) -> new ErrorResult());
+
+    verify();
   }
 
 }
