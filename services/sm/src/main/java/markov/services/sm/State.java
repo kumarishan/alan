@@ -279,7 +279,7 @@ public class State<S, SC> {
    *
    */
   public static interface AsyncAction<S, E, SC, SMC> {
-    public CompletableFuture<To<S, ?>> apply(E event, StateMachineDef.Context<SC, SMC> context) throws Throwable;
+    public CompletableFuture<To<S, ?>> apply(E event, StateMachineDef.Context<SC, SMC> context);
   }
 
   /**

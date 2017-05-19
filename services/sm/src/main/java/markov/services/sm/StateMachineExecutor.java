@@ -23,14 +23,17 @@ class ExecutionException extends Exception {
 }
 
 /**
+ *
+ */
+interface ExecutionId {};
+
+/**
  * State Machine executor
  * @ThreadSafe
  */
 public class StateMachineExecutor<S, SMC> {
 
   private volatile int status = 0;
-  private int receiveFailures = 0; // @GaurdedBy("failureLock")
-  private final Object failureLock = new Object();
   private final LinkedBlockingQueue<ExecutionTask> taskQueue;
 
   private final StateMachineDef<S, SMC> stateMachineDef;
@@ -43,6 +46,9 @@ public class StateMachineExecutor<S, SMC> {
 
   // executor service used by state machine internally if any
   protected final ExecutorService stateMachineExecutorService;
+
+  private final ExecutionPersistance<S, SMC> persistance;
+
 
   /**
    * [StateMachineExecutor description]
@@ -66,6 +72,7 @@ public class StateMachineExecutor<S, SMC> {
                                         true); // true -> FIFO
     this.scheduler = new ScheduledThreadPoolExecutor(parallelism); // [TODO]
     this.status = (-parallelism) | ((-failureThreshold) << FC_SHIFT);
+    this.persistance = new InMemoryExecutionPersistance<>(stateMachineDef, this.forkJoinPool);
   }
 
   /**
@@ -223,8 +230,27 @@ public class StateMachineExecutor<S, SMC> {
     return new ExecutionLock();
   }
 
-  private final CompletableFuture<ExecutionStage<S>> getExecutionStage(ExecutionId id) {
-    return CompletableFuture.supplyAsync(() -> new ExecutionStage<>(null, null, null, false));
+  /**
+   * Get Execution Stage for the given exection id
+   * if it is a new id, then create the starting execution stage.
+   *
+   * @param  id Execution id
+   * @return    CompletableFuture with either null or stage
+   *            null represents failure in gettting execution stage.
+   */
+  private final CompletableFuture<ExecutionStage<S, ?, SMC>> getExecutionStage(ExecutionId id) {
+    return persistance.getExecutionStage(id)
+      .thenComposeAsync((stage) -> {
+        if (stage == null) {  // new execution id, therefore start from scratch
+          ExecutionStage<S, ?, SMC> newStage = ExecutionStage.startFor(id, stateMachineDef);
+          return persistance.saveExecutionStage(newStage)
+            .thenApplyAsync((success) -> {
+              if (success) return newStage;
+              else return null;
+            }, forkJoinPool);
+        } else return CompletableFuture.completedFuture(stage);
+      }, forkJoinPool)
+      .exceptionally((throwable) -> null); // TODO LOG failure to get execution stage
   }
 
   private final CompletableFuture<Boolean> persistExecutionStage(ExecutionStage stage) {
@@ -352,7 +378,14 @@ public class StateMachineExecutor<S, SMC> {
    *
    */
   private static enum ExecutionResult {
-    SUCCESS, RETRY, FAILED_TO_PERSIST_NEXT_STAGE, FAILED_INCONSISTENT_LOCK, FAILED_ACTION_TIMEOUT;
+    SUCCESS,
+    RETRY_TASK,
+    FAILED,
+    FAILED_TO_PERSIST_NEXT_STAGE,
+    FAILED_INCONSISTENT_LOCK,
+    FAILED_ACTION_TIMEOUT,
+    FAILED_UNHANDLED_EVENT,
+    FAILED_INVALID_TRANSITION;
   }
 
   /**
@@ -406,18 +439,24 @@ public class StateMachineExecutor<S, SMC> {
             if (lock.isLocked())
               return getAndRunExecutionStage(task, lock);
             else
-              return CompletableFuture.completedFuture(ExecutionResult.RETRY);
+              return CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
           }, executor.forkJoinPool);
 
 
+      // Handle Execution Failures and success
       mainF.thenAcceptAsync((success) -> {
         switch (success) {
-          case RETRY:
+          case SUCCESS: break; // TODO
+          case RETRY_TASK:
             executor.receive(task.decrement());
             break;
-          case SUCCESS: break; // TODO
           case FAILED_INCONSISTENT_LOCK: break; // TODO
           case FAILED_TO_PERSIST_NEXT_STAGE: break; // TODO
+          case FAILED_UNHANDLED_EVENT:
+            // send to deadletter queue
+            break;
+          case FAILED_INVALID_TRANSITION:
+            break;
         }
         executor.tryRunExecution(this);
       }, executor.forkJoinPool);
@@ -432,36 +471,56 @@ public class StateMachineExecutor<S, SMC> {
      * @return      [description]
      */
     private CompletableFuture<ExecutionResult> getAndRunExecutionStage(ExecutionTask task, ExecutionLock lock) {
-      return executor.getExecutionStage(task.id) // 1. Get execution stage
+      return executor.getExecutionStage(task.id)
         .thenComposeAsync((stage) -> {
           CompletableFuture<ExecutionResult> resultF;
           if (stage != null) {
-            resultF = stage.run(executor.stateMachineDef, executor.stateMachineExecutorService) // 2.a Run the execution stage
-              .thenComposeAsync((nextStage) -> // IMP: always there will be a next stage
-                executor.persistExecutionStage(nextStage) // 2.a.x Persist the execution stage
-                        .thenApplyAsync((success) -> {
-                          if (success) return ExecutionResult.SUCCESS;  // mark the sucessfull completion
-                          else return ExecutionResult.FAILED_TO_PERSIST_NEXT_STAGE; // the execution is failed with inconsistent state
-                        }, executor.forkJoinPool)
-              , executor.forkJoinPool);
-          } else {  // 2.b If failed then retry
-            resultF = CompletableFuture.completedFuture(ExecutionResult.RETRY);
+            resultF = runAndPersistExecutionStage(stage, task);
+          } else {
+            resultF = CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
           }
-          // return resultF;
-          // try release lock once the result is available
-          return resultF.thenComposeAsync((result) ->
-            lock.release().thenComposeAsync((releasedLock) -> {
-              if (releasedLock.isLocked())
-                return executor.persistExecutionStage(stage.failed()) // ???????
-                               .thenApply((whatever) -> ExecutionResult.FAILED_INCONSISTENT_LOCK); // un-released lock puts statemachine in
-                                                                 // inconsistent state.
 
-              return CompletableFuture.completedFuture(result);
-            }, executor.forkJoinPool)
-          , executor.forkJoinPool);
-        }, executor.forkJoinPool);
+          return resultF.thenComposeAsync((result) ->
+            tryReleaseLock(result, lock), executor.forkJoinPool);
+      }, executor.forkJoinPool);
     }
 
+    /**
+     * [runAndPersistExecutionStage description]
+     * @param  stage [description]
+     * @param  task  [description]
+     * @return       [description]
+     */
+    private CompletableFuture<ExecutionResult> runAndPersistExecutionStage(ExecutionStage<S, ?, SMC> stage, ExecutionTask task) {
+      return stage.run(task.event, executor.stateMachineExecutorService) // 2.a Run the execution stage
+        .thenComposeAsync((nextStage) ->
+          executor.persistExecutionStage(nextStage) // 2.a.x Persist the execution stage
+                  .thenApplyAsync((success) -> {
+                    if (success) return ExecutionResult.SUCCESS;  // mark the sucessfull completion
+                    else return ExecutionResult.FAILED_TO_PERSIST_NEXT_STAGE; // the execution is failed with inconsistent state
+                  }, executor.forkJoinPool), executor.forkJoinPool)
+      .exceptionally((exception) -> {
+        if (exception instanceof UnhandledEventException)
+          return ExecutionResult.FAILED_UNHANDLED_EVENT;
+        else if (exception instanceof InvalidStateTransitionException)
+          return ExecutionResult.FAILED_INVALID_TRANSITION;
+        else
+          return ExecutionResult.FAILED;
+      });
+    }
 
+    /**
+     * [tryReleaseLock description]
+     * @param  result [description]
+     * @param  lock   [description]
+     * @return        [description]
+     */
+    private CompletableFuture<ExecutionResult> tryReleaseLock(ExecutionResult result, ExecutionLock lock) {
+      return lock.release().thenApplyAsync((releasedLock) -> {
+        if (releasedLock.isLocked()) // if still locked
+          return ExecutionResult.FAILED_INCONSISTENT_LOCK;
+        else return result;
+      }, executor.forkJoinPool);
+    }
   }
 }

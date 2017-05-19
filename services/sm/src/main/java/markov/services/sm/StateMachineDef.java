@@ -46,6 +46,14 @@ interface StateMachineExecutorServiceFactory {
 }
 
 /**
+ *
+ */
+@FunctionalInterface
+interface ExecutionIdFactory<E> {
+  public ExecutionId apply(E event);
+}
+
+/**
  * Sate Machine
  */
 public abstract class StateMachineDef<S, SMC> {
@@ -391,7 +399,7 @@ public abstract class StateMachineDef<S, SMC> {
      * @param  service [description]
      * @return         [description]
      */
-    public Context<SC, SMC> withExecutorService(ExecutorService service) {
+    public Context<SC, SMC> copy(ExecutorService service) {
       return new Context<>(stateContext, stateMachineContext, service);
     }
   }
