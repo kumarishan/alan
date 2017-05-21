@@ -108,7 +108,7 @@ public abstract class StateMachineDef<S, SMC> {
    * @return [description]
    */
   public S getStartState() {
-    return this.startState;
+    return startState;
   }
 
   /**
@@ -126,6 +126,31 @@ public abstract class StateMachineDef<S, SMC> {
     SC stateContext = state.createContext();
     SMC stateMachineContext = stateMachineContextFactory.get();
     return new StateMachineDef.Context<>(stateContext, stateMachineContext, null);
+  }
+
+  /**
+   *
+   */
+  public Supplier<?> getContextFactory(S name) {
+    return states.get(name).getContextFactory();
+  }
+
+  /**
+   * [isSuccessState description]
+   * @param  name [description]
+   * @return      [description]
+   */
+  public final boolean isSuccessState(S name) {
+    return sinkStates.get(name).isSuccess();
+  }
+
+  /**
+   * [isFailureState description]
+   * @param  name [description]
+   * @return      [description]
+   */
+  public final boolean isFailureState(S name) {
+    return !isSuccessState(name);
   }
 
   /**

@@ -112,6 +112,14 @@ class State<S, SC> {
   }
 
   /**
+   * [getContextFactory description]
+   * @return [description]
+   */
+  public Supplier<SC> getContextFactory() {
+    return contextFactory;
+  }
+
+  /**
    * [validateContextType description]
    * @param  context [description]
    * @return         [description]
@@ -378,6 +386,10 @@ class State<S, SC> {
     public Stop(Throwable exception) {
       super(null, null);
       this.exception = exception;
+    }
+
+    public Throwable getException() {
+      return this.exception;
     }
   }
 

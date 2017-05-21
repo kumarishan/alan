@@ -23,8 +23,7 @@ class InvalidStateTransitionException extends Exception {
 }
 
 /**
- * [TODO]
- * Describes the current stage of the StateMachine for given execution id
+ * Describes the current stage of the StateMachine for the given execution id
  * - current state
  * - current context (state context, state machine context)
  * - previous state
@@ -59,6 +58,22 @@ class ExecutionStage<S, SC, SMC> {
    * - [IMP] return should never complete with Exception
    *         at worst it is the ExecutionStage representing user defined/defauly Failure stage.
    *
+   * Transition cases
+   * ----------------
+   * (all linked to new execution stage ie step++)
+   * - For the current state
+   *   - update the result state context
+   * - For the next state
+   *   - If a context override is provided then
+   *     - Override will be set in the next execution stage
+   *     - doesnt matter first/repeat visit
+   *   - Else
+   *     - If db doesnot have next state's context
+   *       - Use context factory to create initial context
+   *       - update the next's context
+   *     - Else
+   *       - update as carry on context
+   *
    * Steps
    * -----
    * - Get valid Transition for the current state and evnet;
@@ -68,23 +83,23 @@ class ExecutionStage<S, SC, SMC> {
    * @param  executorService [description]
    * @return                 [description]
    */
-  public <E> CompletableFuture<ExecutionStage<S, ?, SMC>> run(E event, ExecutorService executorService) {
+  public <E> CompletableFuture<ExecutionUpdate<S, SMC>> run(E event, ExecutorService executorService) {
     State.Transition<S, E, SC, SMC> transition = stateMachineDef.getTransition(currentState, event, context);
     if (transition != null) {
       if (!transition.isAsync()) { // sync action
         State.To<S, ?> to;
         try {
           to = transition.getAction().apply(event, context.copy(executorService));
-        } catch (Throwable ex) {
+        } catch (Throwable ex) { // unchecked exceptions
           to = stateMachineDef.getRuntimeExceptionHandler().handle(currentState, event, context, ex);
         }
-        // check to intanceof State.Terminate<S>
-        return createNextExecutionStage(to, event);
+        return createNextExecutionUpdate(to, event);
       } else { // async action
         return transition.getAsyncAction().apply(event, context.copy(executorService))
           .exceptionally((exception) ->
             stateMachineDef.getRuntimeExceptionHandler().handle(currentState, event, context, exception))
-          .thenComposeAsync((to) -> createNextExecutionStage(to, event), executorService);
+          .thenComposeAsync((to) ->
+            createNextExecutionUpdate(to, event), executorService);
       }
     } else {
       return failedFuture(new UnhandledEventException("No transition found in the current state " + currentState
@@ -93,27 +108,35 @@ class ExecutionStage<S, SC, SMC> {
   }
 
   /**
-   * [createNextExecutionStage description]
+   * [createNextExecutionUpdate description]
    * @param  to    [description]
    * @param  event [description]
    * @return       [description]
    */
   @SuppressWarnings("unchecked")
-  private <E> CompletableFuture<ExecutionStage<S, ?, SMC>> createNextExecutionStage(State.To<S, ?> to, E event) {
+  private <E> CompletableFuture<ExecutionUpdate<S, SMC>> createNextExecutionUpdate(State.To<S, ?> to, E event) {
     if (to.getContextOverride() != null && !stateMachineDef.validateContextType(to.getState(), to.getContextOverride())) {
       return failedFuture(new InvalidStateTransitionException("Context type " + to.getContextOverride().getClass().getName()
                                    + " doesnot match the target state " + to.getState() + "'s context"));
     }
 
-    StateMachineDef.Context<SC, SMC> targetContext = null;
-
-    if (to.getContextOverride() != null) {
-      targetContext = new StateMachineDef.Context<SC, SMC>((SC) to.getContextOverride(), context.stateMachineContext);
+    ExecutionUpdate<S, SMC> update;
+    if (to instanceof State.Stop) {
+      State.Stop<S> stop = (State.Stop<S>) to;
+      update = new StopExecutionUpdate<>(id, step + 1, stop.getException(), currentState, context.stateContext, context.stateMachineContext, event.getClass());
+    } else if (stateMachineDef.isSuccessState(to.getState())) {
+      update = new SinkStateExecutionUpdate<>(id, step + 1, to.getState(), to.getContextOverride(), currentState, context.stateContext, context.stateMachineContext, event.getClass(), true);
+    } else if (stateMachineDef.isFailureState(to.getState())) {
+      update = new SinkStateExecutionUpdate<>(id, step + 1, to.getState(), to.getContextOverride(), currentState, context.stateContext, context.stateMachineContext, event.getClass(), false);
     } else {
-      targetContext = new StateMachineDef.Context<SC, SMC>(null, context.stateMachineContext);
+      if (to.getContextOverride() != null) {
+        update = new StateExecutionUpdate<>(id, step + 1, to.getState(), to.getContextOverride(), currentState, context.stateContext, context.stateMachineContext, event.getClass());
+      } else {
+        update = new StateExecutionUpdate<>(id, step + 1, to.getState(), stateMachineDef.getContextFactory(to.getState()), currentState, context.stateContext, context.stateMachineContext, event.getClass());
+      }
     }
-    return CompletableFuture.completedFuture(
-      new ExecutionStage<>(id, step + 1, stateMachineDef, to.getState(), targetContext, currentState, event.getClass()));
+
+    return CompletableFuture.completedFuture(update);
   }
 
   /**

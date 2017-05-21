@@ -85,6 +85,14 @@ public class StateMachineExecutor<S, SMC> {
   }
 
   /**
+   * [getPersistance description]
+   * @return [description]
+   */
+  public ExecutionPersistance<S, SMC> getPersistance() {
+    return persistance;
+  }
+
+  /**
    * [getStateMachineId description]
    * @return [description]
    */
@@ -230,29 +238,6 @@ public class StateMachineExecutor<S, SMC> {
     return new ExecutionLock();
   }
 
-  /**
-   * Get Execution Stage for the given exection id
-   * if it is a new id, then create the starting execution stage.
-   *
-   * @param  id Execution id
-   * @return    CompletableFuture with either null or stage
-   *            null represents failure in gettting execution stage.
-   */
-  private final CompletableFuture<ExecutionStage<S, ?, SMC>> getExecutionStage(ExecutionId id) {
-    return persistance.getExecutionStage(id)
-      .thenComposeAsync((stage) -> {
-        if (stage == null) {  // new execution id, therefore start from scratch
-          ExecutionStage<S, ?, SMC> newStage = ExecutionStage.startFor(id, stateMachineDef);
-          return persistance.saveExecutionStage(newStage)
-            .thenApplyAsync((success) -> {
-              if (success) return newStage;
-              else return null;
-            }, forkJoinPool);
-        } else return CompletableFuture.completedFuture(stage);
-      }, forkJoinPool)
-      .exceptionally((throwable) -> null); // TODO LOG failure to get execution stage
-  }
-
   private final CompletableFuture<Boolean> persistExecutionStage(ExecutionStage stage) {
     return CompletableFuture.supplyAsync(() -> true);
   }
@@ -385,6 +370,8 @@ public class StateMachineExecutor<S, SMC> {
     FAILED_INCONSISTENT_LOCK,
     FAILED_ACTION_TIMEOUT,
     FAILED_UNHANDLED_EVENT,
+    FAILED_ALREADY_COMPLETE,
+    FAILED_TO_START,
     FAILED_INVALID_TRANSITION;
   }
 
@@ -421,9 +408,16 @@ public class StateMachineExecutor<S, SMC> {
    */
   protected static class StateExecutionAction<S, SMC> extends RecursiveAction {
     private final StateMachineExecutor<S, SMC> executor;
+    private final ExecutionPersistance<S, SMC> persistance;
+    private final StateMachineDef<S, SMC> stateMachineDef;
+    private final ForkJoinPool es;
+
 
     public StateExecutionAction(StateMachineExecutor<S, SMC> executor) {
       this.executor = executor;
+      this.persistance = executor.getPersistance();
+      this.stateMachineDef = executor.stateMachineDef;
+      this.es = executor.forkJoinPool;
     }
 
     protected void compute() {
@@ -434,14 +428,22 @@ public class StateMachineExecutor<S, SMC> {
       }
 
       CompletableFuture<ExecutionResult> mainF =
-        executor.getLock(task.id).acquire()
-          .thenComposeAsync((lock) -> {
-            if (lock.isLocked())
+        executor.getLock(task.id).acquire().thenCombineAsync(persistance.getExecutionProgress(task.id),
+          (lock, progress) -> {
+            if (progress.isNew()) {
+              S startState = stateMachineDef.getStartState();
+              StateMachineDef.Context<?, SMC> context = stateMachineDef.getStartContext();
+              return persistance.updateExecution(
+                  new NewExecutionUpdate<>(task.id, startState, context.stateContext, context.stateMachineContext))
+                .thenComposeAsync((success) -> {
+                  if (!success) return CompletableFuture.completedFuture(ExecutionResult.FAILED_TO_START);
+                  else return getAndRunExecutionStage(task, lock);
+                }, es);
+            } else if (progress.isLive()) {
               return getAndRunExecutionStage(task, lock);
-            else
-              return CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
-          }, executor.forkJoinPool);
-
+            } else
+              return CompletableFuture.completedFuture(ExecutionResult.FAILED_ALREADY_COMPLETE);
+          }, es).thenComposeAsync((rF) -> rF, es); // flatten
 
       // Handle Execution Failures and success
       mainF.thenAcceptAsync((success) -> {
@@ -450,16 +452,20 @@ public class StateMachineExecutor<S, SMC> {
           case RETRY_TASK:
             executor.receive(task.decrement());
             break;
-          case FAILED_INCONSISTENT_LOCK: break; // TODO
           case FAILED_TO_PERSIST_NEXT_STAGE: break; // TODO
+          case FAILED_INCONSISTENT_LOCK: break; // TODO
+          case FAILED_ACTION_TIMEOUT: break;
           case FAILED_UNHANDLED_EVENT:
             // send to deadletter queue
             break;
-          case FAILED_INVALID_TRANSITION:
-            break;
+          case FAILED_ALREADY_COMPLETE: break;
+          case FAILED_TO_START: break;
+          case FAILED_INVALID_TRANSITION: break;
+          case FAILED: break;
         }
+
         executor.tryRunExecution(this);
-      }, executor.forkJoinPool);
+      }, es);
 
       executor.watch(mainF);
     }
@@ -471,18 +477,19 @@ public class StateMachineExecutor<S, SMC> {
      * @return      [description]
      */
     private CompletableFuture<ExecutionResult> getAndRunExecutionStage(ExecutionTask task, ExecutionLock lock) {
-      return executor.getExecutionStage(task.id)
-        .thenComposeAsync((stage) -> {
-          CompletableFuture<ExecutionResult> resultF;
-          if (stage != null) {
-            resultF = runAndPersistExecutionStage(stage, task);
-          } else {
-            resultF = CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
-          }
+      if (lock.isLocked())
+        return persistance.getExecutionStage(task.id)
+          .thenComposeAsync((stage) -> {
+            CompletableFuture<ExecutionResult> resultF;
+            if (stage != null)
+              resultF = runAndPersistExecutionStage(stage, task);
+            else
+              resultF = CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
 
-          return resultF.thenComposeAsync((result) ->
-            tryReleaseLock(result, lock), executor.forkJoinPool);
-      }, executor.forkJoinPool);
+            return resultF.thenComposeAsync((result) -> tryReleaseLock(result, lock), es);
+        }, es);
+      else
+        return CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
     }
 
     /**
@@ -492,13 +499,16 @@ public class StateMachineExecutor<S, SMC> {
      * @return       [description]
      */
     private CompletableFuture<ExecutionResult> runAndPersistExecutionStage(ExecutionStage<S, ?, SMC> stage, ExecutionTask task) {
-      return stage.run(task.event, executor.stateMachineExecutorService) // 2.a Run the execution stage
-        .thenComposeAsync((nextStage) ->
-          executor.persistExecutionStage(nextStage) // 2.a.x Persist the execution stage
+      return stage.run(task.event, executor.stateMachineExecutorService)
+        .thenComposeAsync((update) ->
+          persistance.updateExecution(update)
                   .thenApplyAsync((success) -> {
-                    if (success) return ExecutionResult.SUCCESS;  // mark the sucessfull completion
-                    else return ExecutionResult.FAILED_TO_PERSIST_NEXT_STAGE; // the execution is failed with inconsistent state
-                  }, executor.forkJoinPool), executor.forkJoinPool)
+                    if (success)
+                      return ExecutionResult.SUCCESS;
+                    else
+                      return ExecutionResult.FAILED_TO_PERSIST_NEXT_STAGE;
+                  }, es)
+          , es)
       .exceptionally((exception) -> {
         if (exception instanceof UnhandledEventException)
           return ExecutionResult.FAILED_UNHANDLED_EVENT;
@@ -516,11 +526,13 @@ public class StateMachineExecutor<S, SMC> {
      * @return        [description]
      */
     private CompletableFuture<ExecutionResult> tryReleaseLock(ExecutionResult result, ExecutionLock lock) {
-      return lock.release().thenApplyAsync((releasedLock) -> {
-        if (releasedLock.isLocked()) // if still locked
-          return ExecutionResult.FAILED_INCONSISTENT_LOCK;
-        else return result;
-      }, executor.forkJoinPool);
+      return lock.release()
+        .thenApplyAsync((releasedLock) -> {
+          if (releasedLock.isLocked()) // if still locked
+            return ExecutionResult.FAILED_INCONSISTENT_LOCK;
+          else
+            return result;
+        }, es);
     }
   }
 }
