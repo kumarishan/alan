@@ -1,7 +1,6 @@
 package markov.services.sm;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
 import java.util.function.Supplier;
 
 import static markov.services.sm.ExecutionProgress.Status;
@@ -66,10 +65,10 @@ class ExecutionProgress {
  *
  */
 class ExecutionUpdate<S, SMC> {
-  private final ExecutionId id;
-  private final int step;
-  private final SMC stateMachineContext;
-  private final ExecutionProgress.Status status;
+   final ExecutionId id;
+   final int step;
+   final SMC stateMachineContext;
+   final ExecutionProgress.Status status;
 
   public ExecutionUpdate(ExecutionId id, int step, SMC stateMachineContext, ExecutionProgress.Status status) {
     this.id = id;
@@ -88,8 +87,8 @@ class ExecutionUpdate<S, SMC> {
  *
  */
 class NewExecutionUpdate<S, SC, SMC> extends ExecutionUpdate<S, SMC> {
-  private final S startState;
-  private final SC startStateContext;
+   final S startState;
+   final SC startStateContext;
 
   public NewExecutionUpdate(ExecutionId id, S startState, SC startStateContext, SMC stateMachineContext) {
     super(id, 1, stateMachineContext, Status.NEW);
@@ -103,13 +102,13 @@ class NewExecutionUpdate<S, SC, SMC> extends ExecutionUpdate<S, SMC> {
  */
 class StateExecutionUpdate<S, SC, SCR, SMC> extends ExecutionUpdate<S, SMC> {
 
-  private final S nextState;
-  private final SC overrideContext;
-  private final Supplier<SC> contextFactory;
+   final S nextState;
+   final SC overrideContext;
+   final Supplier<SC> contextFactory;
 
-  private final S prevState;
-  private final SCR resultContext;
-  private final Class<?> eventType;
+   final S prevState;
+   final SCR resultContext;
+   final Class<?> eventType;
 
   /**
    * Constructor for intermediate states with override context
@@ -158,6 +157,14 @@ class StateExecutionUpdate<S, SC, SCR, SMC> extends ExecutionUpdate<S, SMC> {
     this.resultContext = resultContext;
     this.eventType = eventType;
   }
+
+  /**
+   * [hasOverride description]
+   * @return [description]
+   */
+  public boolean hasOverride() {
+    return overrideContext != null;
+  }
 }
 
 /**
@@ -165,12 +172,12 @@ class StateExecutionUpdate<S, SC, SCR, SMC> extends ExecutionUpdate<S, SMC> {
  */
 class SinkStateExecutionUpdate<S, SR, SCR, SMC> extends ExecutionUpdate<S, SMC> {
 
-  private final S sinkState;
-  private final SR sinkResult;
+   final S sinkState;
+   final SR sinkResult;
 
-  private final S prevState;
-  private final SCR resultContext;
-  private final Class<?> eventType;
+   final S prevState;
+   final SCR resultContext;
+   final Class<?> eventType;
 
   /**
    * [SinkStateExecutionUpdate description]
@@ -196,6 +203,10 @@ class SinkStateExecutionUpdate<S, SR, SCR, SMC> extends ExecutionUpdate<S, SMC> 
     this.eventType = eventType;
   }
 
+  public boolean isSuccess() {
+    return status == Status.SUCCESS;
+  }
+
   private static ExecutionProgress.Status getStatus(boolean isSuccess) {
     if (isSuccess) return Status.SUCCESS;
     else return Status.FAILURE;
@@ -207,11 +218,11 @@ class SinkStateExecutionUpdate<S, SR, SCR, SMC> extends ExecutionUpdate<S, SMC> 
  */
 class StopExecutionUpdate<S, SCR, SMC> extends ExecutionUpdate<S, SMC> {
 
-  private final Throwable exception;
+   final Throwable exception;
 
-  private final S prevState;
-  private final SCR resultContext;
-  private final Class<?> eventType;
+   final S prevState;
+   final SCR resultContext;
+   final Class<?> eventType;
 
   public StopExecutionUpdate(ExecutionId id, int step, Throwable exception, S prevState, SCR resultContext, SMC stateMachineContext, Class<?> eventType) {
     super(id, step, stateMachineContext, Status.FAILURE);
@@ -314,45 +325,4 @@ interface ExecutionPersistance<S, SMC> {
   public CompletableFuture<ExecutionProgress> getExecutionProgress(ExecutionId id);
   public CompletableFuture<ExecutionStage<S, ?, SMC>> getExecutionStage(ExecutionId id);
   public CompletableFuture<Boolean> updateExecution(ExecutionUpdate<S, SMC> update);
-}
-
-/**
- *
- */
-class InMemoryExecutionPersistance<S, SMC> implements ExecutionPersistance<S, SMC> {
-  private final StateMachineDef<S, SMC> stateMachineDef;
-  private final ExecutorService executor;
-
-  public InMemoryExecutionPersistance(StateMachineDef<S, SMC> stateMachineDef, ExecutorService executor) {
-    this.stateMachineDef = stateMachineDef;
-    this.executor = executor;
-  }
-
-  /**
-   * [getExecutionProgress description]
-   * @param  id [description]
-   * @return    [description]
-   */
-  public CompletableFuture<ExecutionProgress> getExecutionProgress(ExecutionId id) {
-    return CompletableFuture.completedFuture(new ExecutionProgress(id, 1, ExecutionProgress.Status.LIVE));
-  }
-
-  /**
-   * TODO
-   * @param  id [description]
-   * @return    [description]
-   */
-  public CompletableFuture<ExecutionStage<S, ?, SMC>> getExecutionStage(ExecutionId id) {
-    return CompletableFuture.completedFuture(new ExecutionStage<>(id, 2, stateMachineDef, null, null, null, null));
-  }
-
-  /**
-   * [saveExecutionStage description]
-   * @param  stage [description]
-   * @return       [description]
-   */
-  public CompletableFuture<Boolean> updateExecution(ExecutionUpdate<S, SMC> update) {
-    return CompletableFuture.completedFuture(true);
-  }
-
 }

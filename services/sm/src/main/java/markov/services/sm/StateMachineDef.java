@@ -431,10 +431,7 @@ public abstract class StateMachineDef<S, SMC> {
    * @param name [description]
    */
   private void addToNameToState(S name) {
-    if (name.getClass().isEnum())
-      nameToState.put(name.toString(), name);
-    else
-      nameToState.put(name.getClass().getName(), name);
+    nameToState.put(nameStrFor(name), name);
   }
 
   ///////////// Context Serialization Deserialization ///////////
@@ -449,23 +446,72 @@ public abstract class StateMachineDef<S, SMC> {
   }
 
   /**
-   * [deserializeContext description]
-   * @param  stateName                 [description]
-   * @param  stateContextBinary        [description]
-   * @param  stateMachineContextBinary [description]
-   * @return                           [description]
+   * [nameStrFor description]
+   * @param  name [description]
+   * @return      [description]
    */
-  public <SC> Context<SC, SMC> deserializeContext(S stateName, byte[] stateContextBinary, byte[] stateMachineContextBinary) {
-    @SuppressWarnings("unchecked")
-    State<S, SC> state = (State<S, SC>) states.get(stateName);
-    if (state == null)
-      throw new IllegalArgumentException("Un registered state(" + stateName + "), it should be first defined using state(...)");
-    @SuppressWarnings("unchecked")
-    SC context = ((ContextDeserializer<SC>)deserializers.get(state.getContextType())).apply(stateContextBinary);
-    SMC stateMachineContext = stateMachineContextDeserializer.apply(stateMachineContextBinary);
-    return new Context<>(context, stateMachineContext, null);
+  public String nameStrFor(S name) {
+    if (name.getClass().isEnum())
+      return name.toString();
+    else
+      return name.getClass().getName();
   }
 
+  /**
+   * [serializeStateContext description]
+   * @param  clazz   [description]
+   * @param  context [description]
+   * @return         [description]
+   */
+  @SuppressWarnings("unchecked")
+  public <SC> byte[] serializeStateContext(Class<SC> clazz, SC context) {
+    return ((ContextSerializer<SC>)serializers.get(clazz)).apply(context);
+  }
+
+  /**
+   * [serializeStateContext description]
+   * @param  state   [description]
+   * @param  context [description]
+   * @return         [description]
+   */
+  @SuppressWarnings("unchecked")
+  public <SC> byte[] serializeStateContext(S state, SC context) {
+    return serializeStateContext((Class<SC>)states.get(state).getContextType(), context);
+  }
+
+  /**
+   * [serializeStateMachineContext description]
+   * @param  context [description]
+   * @return         [description]
+   */
+  public byte[] serializeStateMachineContext(SMC context) {
+    return stateMachineContextSerializer.apply(context);
+  }
+
+  /**
+   * [deserializeStateContext description]
+   * @param  name          [description]
+   * @param  contextBinary [description]
+   * @return               [description]
+   */
+  public <SC> SC deserializeStateContext(S name, byte[] contextBinary) {
+    @SuppressWarnings("unchecked")
+    State<S, SC> state = (State<S, SC>) states.get(name);
+    if (state == null)
+      throw new IllegalArgumentException("Un registered state(" + name + "), it should be first defined using state(...)");
+    @SuppressWarnings("unchecked")
+    SC context = ((ContextDeserializer<SC>)deserializers.get(state.getContextType())).apply(contextBinary);
+    return context;
+  }
+
+  /**
+   * [deserializeStateMachineContext description]
+   * @param  binary [description]
+   * @return        [description]
+   */
+  public SMC deserializeStateMachineContext(byte[] binary) {
+    return stateMachineContextDeserializer.apply(binary);
+  }
 
   /**
    * [toString description]
@@ -499,9 +545,7 @@ public abstract class StateMachineDef<S, SMC> {
     }
 
     Context(SC stateContext, SMC stateMachineContext) {
-      this.stateContext = stateContext;
-      this.stateMachineContext = stateMachineContext;
-      this.executorService = null;
+      this(stateContext, stateMachineContext, null);
     }
 
     /**

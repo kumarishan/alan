@@ -487,7 +487,7 @@ public class StateMachineExecutor<S, SMC> {
               resultF = CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
 
             return resultF.thenComposeAsync((result) -> tryReleaseLock(result, lock), es);
-        }, es);
+          }, es);
       else
         return CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
     }
