@@ -277,7 +277,6 @@ class State<S, SC> {
       this.asyncAction = null;
     }
 
-
     public Transition(Predicate<S, E, SC, SMC> predicate, AsyncAction<S, E, SC, SMC> asyncAction) {
       this.predicate = predicate;
       this.asyncAction = asyncAction;

@@ -18,16 +18,10 @@ import java.util.concurrent.CopyOnWriteArraySet;
  * Dispatcher
  */
 class Dispatcher {
-  private ThreadFactory threadFactory; // = new CustomThreadFactory();
-  private ExecutorService executorService;
+
   private Subscribers subscribers;
   {
     subscribers = new Subscribers();
-  }
-
-  public Dispatcher(ThreadFactory threadFactory, ExecutorService executorService) {
-    this.threadFactory = threadFactory;
-    this.executorService = executorService;
   }
 
   /**

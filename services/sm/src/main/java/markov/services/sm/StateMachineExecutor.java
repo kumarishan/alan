@@ -10,6 +10,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 /**
@@ -49,6 +51,10 @@ public class StateMachineExecutor<S, SMC> {
 
   private final ExecutionPersistance<S, SMC> persistance;
 
+  private final ConcurrentMap<ExecutionId, ExecutionLock> locks;
+  {
+    locks = new ConcurrentHashMap<>();
+  }
 
   /**
    * [StateMachineExecutor description]
@@ -234,12 +240,19 @@ public class StateMachineExecutor<S, SMC> {
     }
   }
 
+  /**
+   * [getLock description]
+   * @param  id [description]
+   * @return    [description]
+   */
   private final ExecutionLock getLock(ExecutionId id) {
-    return new ExecutionLock();
-  }
-
-  private final CompletableFuture<Boolean> persistExecutionStage(ExecutionStage stage) {
-    return CompletableFuture.supplyAsync(() -> true);
+    ExecutionLock lock = locks.get(id);
+    if (lock == null) {
+      lock = new InMemoryExecutionLock(id);
+      ExecutionLock old = locks.putIfAbsent(id, lock);
+      if (old != null) lock = old;
+    }
+    return lock;
   }
 
   ////////////////////////////// Status Methods ////////////////////////////////////////////
@@ -338,24 +351,6 @@ public class StateMachineExecutor<S, SMC> {
      */
     public ExecutionTask decrement() {
       return new ExecutionTask(event, id, retries - 1);
-    }
-  }
-
-  /**
-   * TODO
-   */
-  public static class ExecutionLock {
-
-    public CompletableFuture<ExecutionLock> acquire() {
-      return CompletableFuture.supplyAsync(() -> this);
-    }
-
-    public CompletableFuture<ExecutionLock> release() {
-      return CompletableFuture.supplyAsync(() -> this);
-    }
-
-    public boolean isLocked() {
-      return true;
     }
   }
 

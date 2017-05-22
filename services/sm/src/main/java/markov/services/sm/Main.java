@@ -140,31 +140,19 @@ class MyFSM extends StateMachineDef<MyFSM.State, MyFSMContext> {
 
 }
 
-
 interface CState {};
 class CStateOne implements CState {};
 
 
 public class Main {
+
   public static void main(String[] args) {
+    MarkovConfig config = new MarkovConfig();
+    Markov markov = new Markov(config);
+
     MyFSM fsm = new MyFSM();
-    System.out.println((new CStateOne()).getClass().getName());
-
-    // EventJsonMappers serializers = new EventJsonMappers();
-    // serializers.add(EventOne.class, (event) -> "", (json) -> new EventOne())
-    //            .add(EventTwo.class, (event) -> "", (json) -> new EventTwo());
-
-    // MarkovConfig config = new MarkovConfig();
-    // Markov markov = new Markov(config);
-
-    // MyFSM fsmOne = new MyFSM();
-    // MyFSM fsmTwo = new MyFSM();
-
-    // markov.add(fsmOne);
-    // markov.add(fsmTwo);
-
-    // markov.start();
-
-    // System.out.println("Markov service started");
+    markov.add(fsm, 4);
+    markov.start();
   }
+
 }

@@ -13,13 +13,14 @@ State machine
 - ~~Success and Failure stage handling~~
 - ~~In memory serde persistance (primarily useful for testing)~~
 - ~~Updating and/or resetting current state and state machine context~~
-- Lock using Apache Zookeeper
-- Markov
+- ~~InMemory Lock~~
+- ~~Markov~~
 - Test run (in memory)
 - Code refactoring (class designs)
   - StateMachienDef arrange functions
   - Refactor Command based Persistance
 - Persistance with Cassandra
+- Lock using Apache Zookeeper
 - Test run (db store)
 - Comments + License + README documentation
 - Logging
