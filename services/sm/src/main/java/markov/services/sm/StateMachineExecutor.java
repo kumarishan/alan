@@ -432,9 +432,9 @@ public class StateMachineExecutor<S, SMC> {
           (lock, progress) -> {
             if (progress.isNew()) {
               S startState = stateMachineDef.getStartState();
-              StateMachineDef.Context<?, SMC> context = stateMachineDef.getStartContext();
+              StateMachineDef.Context<S, ?, SMC> context = stateMachineDef.getStartContext();
               return persistance.updateExecution(
-                  new NewExecutionUpdate<>(task.id, startState, context.stateContext, context.stateMachineContext))
+                  new NewExecutionUpdate<>(task.id, startState, context.getStateContext(), context.getStateMachineContext()))
                 .thenComposeAsync((success) -> {
                   if (!success) return CompletableFuture.completedFuture(ExecutionResult.FAILED_TO_START);
                   else return getAndRunExecutionStage(task, lock);

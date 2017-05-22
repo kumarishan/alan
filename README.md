@@ -1,37 +1,61 @@
-# markov
-Stateless state machine
+# markov (after 0.1.0 change to alan)
+State machine
 
-## Upcoming 0.1.0
+## Dev updates
+### 0.1.0
 - ~~Dispatcher~~
 - ~~StateMachineDef~~
 - ~~StateMachineExecutor~~
 - ~~StateActionExecution~~
-- ExecutionStage
-- Exception Handling
-- Sync/Async StateTransition handling
-- Persistance with Cassandra
+- ~~ExecutionStage~~
+- ~~Exception Handling~~
+- ~~Sync/Async StateTransition handling~~
+- ~~Success and Failure stage handling~~
+- ~~In memory serde persistance (primarily useful for testing)~~
+- ~~Updating and/or resetting current state and state machine context~~
 - Lock using Apache Zookeeper
-- Zookeeper for other metadata storage (design)
 - Markov
-- Test run
+- Test run (in memory)
+- Code refactoring (class designs)
+  - StateMachienDef arrange functions
+  - Refactor Command based Persistance
+- Persistance with Cassandra
+- Test run (db store)
 - Comments + License + README documentation
+- Logging
 - Configurator and Factories support using typesafe-config
 - Benchmark and Optimizations
+- Merge to develop
+- Test cases
+- Merge to master
+- change the project name to alan
 
-## Next 0.1.1
+## Features
+### 0.1.0
+- State machine DSL
+- Cassandra persistance layer
+- Parallel Stateless Execution
+
+### 0.1.1
+- Fixes
+
+### 0.2.0
+- Alan 2.0
+  - Pushdown automata
+  - Turing machine
+  - Reply to event from action
 - Configurable Queues
-- Enhanced StateMachineDef
-  - transition to/back another state machine
-  - direct reply for event
 - Windowed order gaurantees on machine
 - Cached Persistance
+- Zookeeper for other metadata storage (design stage)
 - Markov cluster
   - Consistent Routing of events client
+  - Routing event to machine already holding the lock
 - Cache aware transfer of events
 - MySQL persistance
 - Connectors
 
-## 0.2.0
+### 0.3.0
 - REST API (jersey)
 
 

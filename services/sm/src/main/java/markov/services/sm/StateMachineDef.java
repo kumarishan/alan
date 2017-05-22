@@ -31,7 +31,7 @@ interface ContextDeserializer<SC> {
  */
 @FunctionalInterface
 interface RuntimeExceptionHandler<S, SMC> {
-  public State.To<S, ?> handle(S state, Object event, StateMachineDef.Context<?, SMC> context, Throwable exception);
+  public State.To<S, ?> handle(S state, Object event, StateMachineDef.Context<S, ?, SMC> context, Throwable exception);
 }
 
 /**
@@ -68,7 +68,7 @@ public abstract class StateMachineDef<S, SMC> {
     // defaults
     // default serde using jackson...
     executorServiceFactory = () -> ForkJoinPool.commonPool();
-    runtimeExceptionHandler = (S state, Object event, StateMachineDef.Context<?, SMC> context, Throwable exception) -> stop(exception);
+    runtimeExceptionHandler = (S state, Object event, StateMachineDef.Context<S, ?, SMC> context, Throwable exception) -> stop(exception);
   }
 
   /**
@@ -115,24 +115,32 @@ public abstract class StateMachineDef<S, SMC> {
    * [getStartContext description]
    * @return [description]
    */
-  public StateMachineDef.Context<?, SMC> getStartContext() {
+  public StateMachineDef.Context<S, ?, SMC> getStartContext() {
     return _getStartContext();
   }
 
   // wild card capture
-  private <SC> StateMachineDef.Context<SC, SMC> _getStartContext() {
+  private <SC> StateMachineDef.Context<S, SC, SMC> _getStartContext() {
     @SuppressWarnings("unchecked")
     State<S, SC> state = (State<S, SC>)states.get(getStartState());
     SC stateContext = state.createContext();
     SMC stateMachineContext = stateMachineContextFactory.get();
-    return new StateMachineDef.Context<>(stateContext, stateMachineContext, null);
+    return new StateMachineDef.Context<>(getStartState(), stateContext, stateMachineContext, this);
   }
 
   /**
    *
    */
-  public Supplier<?> getContextFactory(S name) {
+  public Supplier<?> getStateContextFactory(S name) {
     return states.get(name).getContextFactory();
+  }
+
+  /**
+   * [getStateMachineContextFactory description]
+   * @return [description]
+   */
+  public Supplier<SMC> getStateMachineContextFactory() {
+    return stateMachineContextFactory;
   }
 
   /**
@@ -160,9 +168,9 @@ public abstract class StateMachineDef<S, SMC> {
    * @param  context   [description]
    * @return           [description]
    */
-  public <E, SC> State.Transition<S, E, SC, SMC> getTransition(S stateName, E event, StateMachineDef.Context<SC, SMC> context) {
+  public <E, SC> State.Transition<S, E, SC, SMC> getTransition(E event, StateMachineDef.Context<S, SC, SMC> context) {
     @SuppressWarnings("unchecked")
-    State<S, SC> state = (State<S, SC>) states.get(stateName);
+    State<S, SC> state = (State<S, SC>) states.get(context.state);
     @SuppressWarnings("unchecked")
     List<State.Transition<S, E, SC, SMC>> transitions = state.getTransitions((Class<E>)event.getClass());
     State.Transition<S, E, SC, SMC> transition = null;
@@ -533,19 +541,82 @@ public abstract class StateMachineDef<S, SMC> {
   /**
    *
    */
-  final static class Context<SC, SMC> {
-    final SC stateContext;
-    final SMC stateMachineContext;
-    final ExecutorService executorService;
+  final static class Context<S, SC, SMC> {
+    private SC stateContext;
+    private SMC stateMachineContext;
+    private final ExecutorService executorService;
+    private final S state;
+    private final StateMachineDef<S, SMC> stateMachineDef;
 
-    Context(SC stateContext, SMC stateMachineContext, ExecutorService executorService) {
+    Context(S state, SC stateContext, SMC stateMachineContext, ExecutorService executorService, StateMachineDef<S, SMC> stateMachineDef) {
+      this.state = state;
       this.stateContext = stateContext;
       this.stateMachineContext = stateMachineContext;
       this.executorService = executorService;
+      this.stateMachineDef = stateMachineDef;
     }
 
-    Context(SC stateContext, SMC stateMachineContext) {
-      this(stateContext, stateMachineContext, null);
+    Context(S state, SC stateContext, SMC stateMachineContext, StateMachineDef<S, SMC> stateMachineDef) {
+      this(state, stateContext, stateMachineContext, null, stateMachineDef);
+    }
+
+    /**
+     * [getState description]
+     * @return [description]
+     */
+    public S getState() {
+      return state;
+    }
+
+    /**
+     * [getStateContext description]
+     * @return [description]
+     */
+    public SC getStateContext() {
+      return stateContext;
+    }
+
+    /**
+     * [getStateMachineContext description]
+     * @return [description]
+     */
+    public SMC getStateMachineContext() {
+      return stateMachineContext;
+    }
+
+    /**
+     * [resetStateContext description]
+     * @return [description]
+     */
+    @SuppressWarnings("unchecked")
+    public SC resetStateContext() {
+      stateContext = (SC)stateMachineDef.getStateContextFactory(state).get();
+      return stateContext;
+    }
+
+    /**
+     * [resetStateMachineContext description]
+     * @return [description]
+     */
+    public SMC resetStateMachineContext() {
+      stateMachineContext = stateMachineDef.getStateMachineContextFactory().get();
+      return stateMachineContext;
+    }
+
+    /**
+     * [setStateContext description]
+     * @param context [description]
+     */
+    public void setStateContext(SC context) {
+      stateContext = context;
+    }
+
+    /**
+     * [setStateMachineContext description]
+     * @param context [description]
+     */
+    public void setStateMachineContext(SMC context) {
+      stateMachineContext = context;
     }
 
     /**
@@ -553,8 +624,8 @@ public abstract class StateMachineDef<S, SMC> {
      * @param  service [description]
      * @return         [description]
      */
-    public Context<SC, SMC> copy(ExecutorService service) {
-      return new Context<>(stateContext, stateMachineContext, service);
+    public Context<S, SC, SMC> copy(ExecutorService service) {
+      return new Context<>(state, stateContext, stateMachineContext, service, stateMachineDef);
     }
   }
 

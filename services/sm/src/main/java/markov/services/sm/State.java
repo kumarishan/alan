@@ -205,9 +205,9 @@ class State<S, SC> {
   public static class Buildr<S, SC, SMC, E> {
     State<S, SC> state;
     Class<E> eventType;
-    Predicate<E, SC, SMC> predicate;
+    Predicate<S, E, SC, SMC> predicate;
 
-    public Buildr(State<S, SC> state, Class<E> eventType, Predicate<E, SC, SMC> predicate) {
+    public Buildr(State<S, SC> state, Class<E> eventType, Predicate<S, E, SC, SMC> predicate) {
       this.state = state;
       this.eventType = eventType;
       this.predicate = predicate;
@@ -236,7 +236,7 @@ class State<S, SC> {
      * @param  predicate [description]
      * @return           [description]
      */
-    public <E1> Buildr<S, SC, SMC, E1> onEvent(Class<E1> eventType, Predicate<E1, SC, SMC> predicate) {
+    public <E1> Buildr<S, SC, SMC, E1> onEvent(Class<E1> eventType, Predicate<S, E1, SC, SMC> predicate) {
       return new Buildr<>(this.state, eventType, predicate);
     }
 
@@ -267,18 +267,18 @@ class State<S, SC> {
    *
    */
   public static class Transition<S, E, SC, SMC> {
-    private final Predicate<E, SC, SMC> predicate;
+    private final Predicate<S, E, SC, SMC> predicate;
     private final Action<S, E, SC, SMC> action;
     private final AsyncAction<S, E, SC, SMC> asyncAction;
 
-    public Transition(Predicate<E, SC, SMC> predicate, Action<S, E, SC, SMC> action) {
+    public Transition(Predicate<S, E, SC, SMC> predicate, Action<S, E, SC, SMC> action) {
       this.predicate = predicate;
       this.action = action;
       this.asyncAction = null;
     }
 
 
-    public Transition(Predicate<E, SC, SMC> predicate, AsyncAction<S, E, SC, SMC> asyncAction) {
+    public Transition(Predicate<S, E, SC, SMC> predicate, AsyncAction<S, E, SC, SMC> asyncAction) {
       this.predicate = predicate;
       this.asyncAction = asyncAction;
       this.action = null;
@@ -314,7 +314,7 @@ class State<S, SC> {
      * @param  context [description]
      * @return         [description]
      */
-    public boolean check(E event, StateMachineDef.Context<SC, SMC> context) {
+    public boolean check(E event, StateMachineDef.Context<S, SC, SMC> context) {
       return (this.predicate == null ? true : this.predicate.apply(event, context));
     }
   }
@@ -323,8 +323,8 @@ class State<S, SC> {
    *
    */
   @FunctionalInterface
-  public static interface Predicate<E, SC, SMC> {
-    public boolean apply(E event, StateMachineDef.Context<SC, SMC> context);
+  public static interface Predicate<S, E, SC, SMC> {
+    public boolean apply(E event, StateMachineDef.Context<S, SC, SMC> context);
   }
 
   /**
@@ -332,7 +332,7 @@ class State<S, SC> {
    */
   @FunctionalInterface
   public static interface Action<S, E, SC, SMC> {
-    public To<S, ?> apply(E event, StateMachineDef.Context<SC, SMC> context) throws Throwable;
+    public To<S, ?> apply(E event, StateMachineDef.Context<S, SC, SMC> context) throws Throwable;
   }
 
   /**
@@ -340,7 +340,7 @@ class State<S, SC> {
    */
   @FunctionalInterface
   public static interface AsyncAction<S, E, SC, SMC> {
-    public CompletableFuture<To<S, ?>> apply(E event, StateMachineDef.Context<SC, SMC> context);
+    public CompletableFuture<To<S, ?>> apply(E event, StateMachineDef.Context<S, SC, SMC> context);
   }
 
   /**

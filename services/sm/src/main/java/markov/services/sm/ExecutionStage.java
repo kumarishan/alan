@@ -35,12 +35,12 @@ class ExecutionStage<S, SC, SMC> {
   private final int step;
   private final StateMachineDef<S, SMC> stateMachineDef;
   private final S currentState;
-  private final StateMachineDef.Context<SC, SMC> context;
+  private final StateMachineDef.Context<S, SC, SMC> context;
   private final S previousState;
   private final Class<?> prevTriggerEventType;
 
   public ExecutionStage(ExecutionId id, int step, StateMachineDef<S, SMC> stateMachineDef,
-                        S currentState, StateMachineDef.Context<SC, SMC> context,
+                        S currentState, StateMachineDef.Context<S, SC, SMC> context,
                         S previousState, Class<?> prevTriggerEventType) {
     this.id = id;
     this.step = step;
@@ -84,7 +84,7 @@ class ExecutionStage<S, SC, SMC> {
    * @return                 [description]
    */
   public <E> CompletableFuture<ExecutionUpdate<S, SMC>> run(E event, ExecutorService executorService) {
-    State.Transition<S, E, SC, SMC> transition = stateMachineDef.getTransition(currentState, event, context);
+    State.Transition<S, E, SC, SMC> transition = stateMachineDef.getTransition(event, context);
     if (transition != null) {
       if (!transition.isAsync()) { // sync action
         State.To<S, ?> to;
@@ -123,16 +123,16 @@ class ExecutionStage<S, SC, SMC> {
     ExecutionUpdate<S, SMC> update;
     if (to instanceof State.Stop) {
       State.Stop<S> stop = (State.Stop<S>) to;
-      update = new StopExecutionUpdate<>(id, step + 1, stop.getException(), currentState, context.stateContext, context.stateMachineContext, event.getClass());
+      update = new StopExecutionUpdate<>(id, step + 1, stop.getException(), currentState, context.getStateContext(), context.getStateMachineContext(), event.getClass());
     } else if (stateMachineDef.isSuccessState(to.getState())) {
-      update = new SinkStateExecutionUpdate<>(id, step + 1, to.getState(), to.getContextOverride(), currentState, context.stateContext, context.stateMachineContext, event.getClass(), true);
+      update = new SinkStateExecutionUpdate<>(id, step + 1, to.getState(), to.getContextOverride(), currentState, context.getStateContext(), context.getStateMachineContext(), event.getClass(), true);
     } else if (stateMachineDef.isFailureState(to.getState())) {
-      update = new SinkStateExecutionUpdate<>(id, step + 1, to.getState(), to.getContextOverride(), currentState, context.stateContext, context.stateMachineContext, event.getClass(), false);
+      update = new SinkStateExecutionUpdate<>(id, step + 1, to.getState(), to.getContextOverride(), currentState, context.getStateContext(), context.getStateMachineContext(), event.getClass(), false);
     } else {
       if (to.getContextOverride() != null) {
-        update = new StateExecutionUpdate<>(id, step + 1, to.getState(), to.getContextOverride(), currentState, context.stateContext, context.stateMachineContext, event.getClass());
+        update = new StateExecutionUpdate<>(id, step + 1, to.getState(), to.getContextOverride(), currentState, context.getStateContext(), context.getStateMachineContext(), event.getClass());
       } else {
-        update = new StateExecutionUpdate<>(id, step + 1, to.getState(), stateMachineDef.getContextFactory(to.getState()), currentState, context.stateContext, context.stateMachineContext, event.getClass());
+        update = new StateExecutionUpdate<>(id, step + 1, to.getState(), stateMachineDef.getStateContextFactory(to.getState()), currentState, context.getStateContext(), context.getStateMachineContext(), event.getClass());
       }
     }
 
@@ -170,7 +170,7 @@ class ExecutionStage<S, SC, SMC> {
    */
   public static <S, SMC> ExecutionStage<S, ?, SMC> startFor(ExecutionId id, StateMachineDef<S, SMC> stateMachineDef) {
     S state = stateMachineDef.getStartState();
-    StateMachineDef.Context<?, SMC> context = stateMachineDef.getStartContext();
+    StateMachineDef.Context<S, ?, SMC> context = stateMachineDef.getStartContext();
     return new ExecutionStage<>(id, 1, stateMachineDef, state, context, null, null);
   }
 }

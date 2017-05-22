@@ -136,7 +136,7 @@ public final class InMemoryExecutionPersistance<S, SMC> implements ExecutionPers
     byte[] smcBinary = stateMachineContexts.get(id).get(step);
     SC stateContext = stateMachineDef.deserializeStateContext(currentState, currentContext.binary);
     SMC stateMachineContext = stateMachineDef.deserializeStateMachineContext(smcBinary);
-    StateMachineDef.Context<SC, SMC> context = new StateMachineDef.Context<>(stateContext, stateMachineContext);
+    StateMachineDef.Context<S, SC, SMC> context = new StateMachineDef.Context<>(currentState, stateContext, stateMachineContext, stateMachineDef);
 
     Class<?> prevTriggerEventType;
     try {

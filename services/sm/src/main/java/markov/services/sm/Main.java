@@ -54,6 +54,7 @@ class MyFSM extends StateMachineDef<MyFSM.State, MyFSMContext> {
           // do something
           // reset state context
           // use context.executorService for any async code
+
           System.out.println(event.getClass().getName() + " - 1");
           return goTo(StateOne);
       })
