@@ -13,11 +13,16 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 /**
  * Dispatcher
  */
 class Dispatcher {
+
+  private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   private Subscribers subscribers;
   {
@@ -46,9 +51,9 @@ class Dispatcher {
       if (subscriber.isTerminated()) {
         result.error(subscriber.getId(), TerminatedError);
         subscribers.remove(subscriber);
-      } else if (!subscriber.isActive())
+      } else if (!subscriber.isActive()) {
         result.error(subscriber.getId(), InactiveError);
-      else {
+      } else {
         boolean success = subscriber.receive(event);
         if (!success) { // fix here, more elaborate return values
           result.error(subscriber.getId(), SomeOtherError.withMessage("Receive returned false"));

@@ -147,7 +147,7 @@ public class StateMachineExecutor<S, SMC> {
    */
   private void notifyStateExecutionActionCompletion() {
     int s;
-    do {} while (!U.compareAndSwapInt(this, STATUS_OFFSET, s = status, s & RESET_FC));
+    do {} while (!U.compareAndSwapInt(this, STATUS_OFFSET, s = status, s - EC_UNIT));
   }
 
   /**
@@ -183,7 +183,6 @@ public class StateMachineExecutor<S, SMC> {
    *               or is suspended or terminated
    */
   public final boolean receive(Object event) {
-    // logger.debug("Received event {}", event);
     ExecutionId id = stateMachineDef.getExecutionId(event);
     ExecutionTask task = new ExecutionTask(event, id, eventRetries);
     return receive(task);
@@ -430,8 +429,6 @@ public class StateMachineExecutor<S, SMC> {
         return;
       }
 
-      logger.debug("Starting task {}", task.id);
-
       ExecutionLock lock = executor.getLock(task.id);
 
       CompletableFuture<ExecutionResult> mainF =
@@ -451,7 +448,7 @@ public class StateMachineExecutor<S, SMC> {
                   } else if (progress.isLive()) {
                     return getAndRunExecutionStage(task, lock);
                   } else
-                    return CompletableFuture.completedFuture(ExecutionResult.FAILED_ALREADY_COMPLETE);
+                    return tryReleaseLock(ExecutionResult.FAILED_ALREADY_COMPLETE, lock);
                 }, es);
             } else {
               return CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
@@ -464,7 +461,6 @@ public class StateMachineExecutor<S, SMC> {
         switch (success) {
           case SUCCESS: break; // TODO
           case RETRY_TASK:
-            logger.debug("Retrying task {}", task.id);
             executor.receive(task.decrement());
             break;
           case FAILED_TO_PERSIST_NEXT_STAGE: break; // TODO
@@ -497,19 +493,16 @@ public class StateMachineExecutor<S, SMC> {
      * @return      [description]
      */
     private CompletableFuture<ExecutionResult> getAndRunExecutionStage(ExecutionTask task, ExecutionLock lock) {
-      if (lock.isLocked())
-        return persistance.getExecutionStage(task.id)
-          .thenComposeAsync((stage) -> {
-            CompletableFuture<ExecutionResult> resultF;
-            if (stage != null)
-              resultF = runAndPersistExecutionStage(stage, task);
-            else
-              resultF = CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
+      return persistance.getExecutionStage(task.id)
+        .thenComposeAsync((stage) -> {
+          CompletableFuture<ExecutionResult> resultF;
+          if (stage != null)
+            resultF = runAndPersistExecutionStage(stage, task);
+          else
+            resultF = CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
 
-            return resultF.thenComposeAsync((result) -> tryReleaseLock(result, lock), es);
-          }, es);
-      else
-        return CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
+          return resultF.thenComposeAsync((result) -> tryReleaseLock(result, lock), es);
+        }, es);
     }
 
     /**
@@ -530,13 +523,14 @@ public class StateMachineExecutor<S, SMC> {
                   }, es)
           , es)
       .exceptionally((exception) -> {
-        // exception.printStackTrace();
         if (exception.getCause() instanceof UnhandledEventException)
           return ExecutionResult.FAILED_UNHANDLED_EVENT;
         else if (exception.getCause() instanceof InvalidStateTransitionException)
           return ExecutionResult.FAILED_INVALID_TRANSITION;
-        else
+        else {
+          exception.printStackTrace();
           return ExecutionResult.FAILED;
+        }
       });
     }
 
