@@ -5,8 +5,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 
 interface ExecutionLock {
-  public CompletableFuture<ExecutionLock> acquire();
-  public CompletableFuture<ExecutionLock> release();
+  public CompletableFuture<Boolean> acquire();
+  public CompletableFuture<Boolean> release();
   public boolean isLocked();
 }
 
@@ -26,18 +26,16 @@ class InMemoryExecutionLock implements ExecutionLock {
    * [acquire description]
    * @return [description]
    */
-  public CompletableFuture<ExecutionLock> acquire() {
-    locked.compareAndSet(false, true);
-    return CompletableFuture.completedFuture(this);
+  public CompletableFuture<Boolean> acquire() {
+    return CompletableFuture.completedFuture(locked.compareAndSet(false, true));
   }
 
   /**
    * [release description]
    * @return [description]
    */
-  public CompletableFuture<ExecutionLock> release() {
-    locked.compareAndSet(true, false);
-    return CompletableFuture.completedFuture(this);
+  public CompletableFuture<Boolean> release() {
+    return CompletableFuture.completedFuture(locked.compareAndSet(true, false));
   }
 
   /**

@@ -48,6 +48,22 @@ class SinkState<S, SMC, R> {
   }
 
   /**
+   * [getAction description]
+   * @return [description]
+   */
+  public Function<SMC, R> getAction() {
+    return action;
+  }
+
+  /**
+   * [getAsyncAction description]
+   * @return [description]
+   */
+  public BiFunction<SMC, ExecutorService, CompletableFuture<R>> getAsyncAction() {
+    return asyncAction;
+  }
+
+  /**
    * [isSuccess description]
    * @return [description]
    */

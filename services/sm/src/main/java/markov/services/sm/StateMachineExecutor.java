@@ -12,6 +12,8 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
@@ -34,6 +36,8 @@ interface ExecutionId {};
  * @ThreadSafe
  */
 public class StateMachineExecutor<S, SMC> {
+
+  private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   private volatile int status = 0;
   private final LinkedBlockingQueue<ExecutionTask> taskQueue;
@@ -179,6 +183,7 @@ public class StateMachineExecutor<S, SMC> {
    *               or is suspended or terminated
    */
   public final boolean receive(Object event) {
+    // logger.debug("Received event {}", event);
     ExecutionId id = stateMachineDef.getExecutionId(event);
     ExecutionTask task = new ExecutionTask(event, id, eventRetries);
     return receive(task);
@@ -409,6 +414,7 @@ public class StateMachineExecutor<S, SMC> {
     private final StateMachineDef<S, SMC> stateMachineDef;
     private final ForkJoinPool es;
 
+    Logger logger = LoggerFactory.getLogger(this.getClass());
 
     public StateExecutionAction(StateMachineExecutor<S, SMC> executor) {
       this.executor = executor;
@@ -419,34 +425,46 @@ public class StateMachineExecutor<S, SMC> {
 
     protected void compute() {
       ExecutionTask task = executor.next();
-      if (task == null) {
+      if (task == null || task.retries == 0) {
         executor.notifyStateExecutionActionCompletion();
         return;
       }
 
+      logger.debug("Starting task {}", task.id);
+
+      ExecutionLock lock = executor.getLock(task.id);
+
       CompletableFuture<ExecutionResult> mainF =
-        executor.getLock(task.id).acquire().thenCombineAsync(persistance.getExecutionProgress(task.id),
-          (lock, progress) -> {
-            if (progress.isNew()) {
-              S startState = stateMachineDef.getStartState();
-              StateMachineDef.Context<S, ?, SMC> context = stateMachineDef.getStartContext();
-              return persistance.updateExecution(
-                  new NewExecutionUpdate<>(task.id, startState, context.getStateContext(), context.getStateMachineContext()))
-                .thenComposeAsync((success) -> {
-                  if (!success) return CompletableFuture.completedFuture(ExecutionResult.FAILED_TO_START);
-                  else return getAndRunExecutionStage(task, lock);
+        lock.acquire().thenComposeAsync((locked) -> {
+            if (locked) {
+              return persistance.getExecutionProgress(task.id)
+                .thenComposeAsync((progress) -> {
+                  if (progress.isNew()) {
+                    S startState = stateMachineDef.getStartState();
+                    StateMachineDef.Context<S, ?, SMC> context = stateMachineDef.getStartContext();
+                    return persistance.updateExecution(
+                        new NewExecutionUpdate<>(task.id, startState, context.getStateContext(), context.getStateMachineContext()))
+                      .thenComposeAsync((success) -> {
+                        if (!success) return CompletableFuture.completedFuture(ExecutionResult.FAILED_TO_START);
+                        else return getAndRunExecutionStage(task, lock);
+                      }, es);
+                  } else if (progress.isLive()) {
+                    return getAndRunExecutionStage(task, lock);
+                  } else
+                    return CompletableFuture.completedFuture(ExecutionResult.FAILED_ALREADY_COMPLETE);
                 }, es);
-            } else if (progress.isLive()) {
-              return getAndRunExecutionStage(task, lock);
-            } else
-              return CompletableFuture.completedFuture(ExecutionResult.FAILED_ALREADY_COMPLETE);
-          }, es).thenComposeAsync((rF) -> rF, es); // flatten
+            } else {
+              return CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
+            }
+          }, es);
 
       // Handle Execution Failures and success
       mainF.thenAcceptAsync((success) -> {
+        logger.debug("Task {} ended with {}", task.id, success);
         switch (success) {
           case SUCCESS: break; // TODO
           case RETRY_TASK:
+            logger.debug("Retrying task {}", task.id);
             executor.receive(task.decrement());
             break;
           case FAILED_TO_PERSIST_NEXT_STAGE: break; // TODO
@@ -512,6 +530,7 @@ public class StateMachineExecutor<S, SMC> {
                   }, es)
           , es)
       .exceptionally((exception) -> {
+        // exception.printStackTrace();
         if (exception.getCause() instanceof UnhandledEventException)
           return ExecutionResult.FAILED_UNHANDLED_EVENT;
         else if (exception.getCause() instanceof InvalidStateTransitionException)
@@ -529,8 +548,8 @@ public class StateMachineExecutor<S, SMC> {
      */
     private CompletableFuture<ExecutionResult> tryReleaseLock(ExecutionResult result, ExecutionLock lock) {
       return lock.release()
-        .thenApplyAsync((releasedLock) -> {
-          if (releasedLock.isLocked()) // if still locked
+        .thenApplyAsync((released) -> {
+          if (!released) // if still locked
             return ExecutionResult.FAILED_INCONSISTENT_LOCK;
           else
             return result;

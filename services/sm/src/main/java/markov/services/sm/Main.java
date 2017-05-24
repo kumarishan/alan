@@ -2,6 +2,11 @@ package markov.services.sm;
 
 import java.util.Random;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static markov.services.sm.Turnstile.State.*;
 import static markov.services.sm.Turnstile.State;
@@ -69,16 +74,28 @@ class Turnstile extends StateMachineDef<Turnstile.State, TurnstileContext> {
     }
   }
 
-static class MyExecutionId implements ExecutionId {
-  String turnstile;
-  public MyExecutionId(String turnstile) {
-    this.turnstile = turnstile;
+  static class MyExecutionId implements ExecutionId {
+    String turnstile;
+    public MyExecutionId(String turnstile) {
+      this.turnstile = turnstile;
+    }
+
+    @Override
+    public int hashCode() {
+      return turnstile.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      return (other instanceof MyExecutionId && turnstile.equals(((MyExecutionId)other).turnstile));
+    }
+
+    public String toString() {
+      return turnstile;
+    }
   }
 
-  public String toString() {
-    return turnstile;
-  }
-}
+  Logger logger = LoggerFactory.getLogger(this.getClass());
 
   {
     id("my-fsm");
@@ -103,30 +120,35 @@ static class MyExecutionId implements ExecutionId {
 
     state(StateOne, StateOneContext.class, () -> new StateOneContext(0))
       .onEvent(EventOne.class).perform((event, context) -> {
-        System.out.println("Received EventOne in StateOne");
         context.getStateContext().count += event.increment;
         context.getStateMachineContext().total += event.increment;
 
-        if (context.getStateMachineContext().total > 40)
-            return goTo(Success);
-        else if (context.getStateMachineContext().total > 20)
+        logger.debug("In state {} received event {} state machine context total = {}, State context count = {}",
+            context.getState(), event.getClass().getName(), context.getStateMachineContext().total, context.getStateContext().count);
+
+        if (context.getStateMachineContext().total > 8)
+          return goTo(Success);
+        else if (context.getStateMachineContext().total > 5)
           return goTo(StateTwo);
         else
           return goTo(StateOne);
       })
       .onEvent(EventTwo.class).perform((event, context) -> {
-        System.out.println("Received EventTwo in StateOne");
         context.getStateMachineContext().total -= event.decrement;
+        logger.debug("In state {} received event {} state machine context total = {}",
+            context.getState(), event.getClass().getName(), context.getStateMachineContext().total);
         return goTo(StateTwo);
       });
 
 
     state(StateTwo, StateTwoContext.class, () -> new StateTwoContext(0))
       .onEvent(EventTwo.class).perform((event, context) -> {
-        System.out.println("Received EventTwo in StateTwo");
 
         context.getStateContext().count += event.decrement;
         context.getStateMachineContext().total -= event.decrement;
+
+        logger.debug("In state {} received event {} state machine context total = {} state context count = {}",
+            context.getState(), event.getClass().getName(), context.getStateMachineContext().total, context.getStateContext().count);
 
         if (context.getStateMachineContext().total < -20)
           return goTo(Failure);
@@ -136,7 +158,8 @@ static class MyExecutionId implements ExecutionId {
           return goTo(StateTwo);
       })
       .onEvent(EventOne.class).perform((event, context) -> {
-        System.out.println("Received EventOne in StateTwo");
+        logger.debug("In state {} received event {} state machine context total = {}",
+            context.getState(), event.getClass().getName(), context.getStateMachineContext().total);
 
         context.getStateMachineContext().total += event.increment;
         return goTo(StateOne);
@@ -223,13 +246,15 @@ class CStateOne implements CState {};
 
 public class Main {
 
+  private static volatile int count = 0;
+
   public static void main(String[] args) {
 
     MarkovConfig config = new MarkovConfig();
     Markov markov = new Markov(config);
 
     Turnstile fsm = new Turnstile();
-    markov.add(fsm, 1);
+    markov.add(fsm, 4);
     markov.start();
 
     EventOne one1 = new EventOne("t-1", 1);
@@ -239,8 +264,15 @@ public class Main {
     Object[] events = new Object[] {one1, one2, two1, two2};
 
     Random random = new Random(10);
-    for (int i = 0; i < 10; i++) {
-      markov.send(events[random.nextInt(4)]);
+    ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(1);
+
+    int delay = 0;
+    int period = 1000;
+    for (int i = 0; i < 15; i++) {
+      scheduler.schedule(() -> {
+        markov.send(events[random.nextInt(4)]);
+      }, delay, TimeUnit.MILLISECONDS);
+      delay += period;
     }
 
     try {

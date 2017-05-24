@@ -2,6 +2,8 @@ package markov.services.sm;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 /**
@@ -38,6 +40,8 @@ class ExecutionStage<S, SC, SMC> {
   private final StateMachineDef.Context<S, SC, SMC> context;
   private final S previousState;
   private final Class<?> prevTriggerEventType;
+
+  private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
   public ExecutionStage(ExecutionId id, int step, StateMachineDef<S, SMC> stateMachineDef,
                         S currentState, StateMachineDef.Context<S, SC, SMC> context,
@@ -93,13 +97,14 @@ class ExecutionStage<S, SC, SMC> {
         } catch (Throwable ex) { // unchecked exceptions
           to = stateMachineDef.getRuntimeExceptionHandler().handle(currentState, event, context, ex);
         }
-        return createNextExecutionUpdate(to, event);
+        logger.debug("Transition To {}", to.getState());
+        return createNextExecutionUpdate(to, event, executorService);
       } else { // async action
         return transition.getAsyncAction().apply(event, context.copy(executorService))
           .exceptionally((exception) ->
             stateMachineDef.getRuntimeExceptionHandler().handle(currentState, event, context, exception))
           .thenComposeAsync((to) ->
-            createNextExecutionUpdate(to, event), executorService);
+            createNextExecutionUpdate(to, event, executorService), executorService);
       }
     } else {
       return failedFuture(new UnhandledEventException("No transition found in the current state " + currentState
@@ -114,7 +119,7 @@ class ExecutionStage<S, SC, SMC> {
    * @return       [description]
    */
   @SuppressWarnings("unchecked")
-  private <E> CompletableFuture<ExecutionUpdate<S, SMC>> createNextExecutionUpdate(State.To<S, ?> to, E event) {
+  private <E> CompletableFuture<ExecutionUpdate<S, SMC>> createNextExecutionUpdate(State.To<S, ?> to, E event, ExecutorService es) {
     if (to.getContextOverride() != null && !stateMachineDef.validateContextType(to.getState(), to.getContextOverride())) {
       return failedFuture(new InvalidStateTransitionException("Context type " + to.getContextOverride().getClass().getName()
                                    + " doesnot match the target state " + to.getState() + "'s context"));
@@ -125,9 +130,9 @@ class ExecutionStage<S, SC, SMC> {
       State.Stop<S> stop = (State.Stop<S>) to;
       update = new StopExecutionUpdate<>(id, step + 1, stop.getException(), currentState, context.getStateContext(), context.getStateMachineContext(), event.getClass());
     } else if (stateMachineDef.isSuccessState(to.getState())) {
-      update = new SinkStateExecutionUpdate<>(id, step + 1, to.getState(), to.getContextOverride(), currentState, context.getStateContext(), context.getStateMachineContext(), event.getClass(), true);
+      return runSinkState(to, true, event.getClass(), es);
     } else if (stateMachineDef.isFailureState(to.getState())) {
-      update = new SinkStateExecutionUpdate<>(id, step + 1, to.getState(), to.getContextOverride(), currentState, context.getStateContext(), context.getStateMachineContext(), event.getClass(), false);
+      return runSinkState(to, false, event.getClass(), es);
     } else {
       if (to.getContextOverride() != null) {
         update = new StateExecutionUpdate<>(id, step + 1, to.getState(), to.getContextOverride(), currentState, context.getStateContext(), context.getStateMachineContext(), event.getClass());
@@ -139,13 +144,17 @@ class ExecutionStage<S, SC, SMC> {
     return CompletableFuture.completedFuture(update);
   }
 
-  /**
-   * [failed description]
-   * ????????
-   * @return [description]
-   */
-  public ExecutionStage failed() {
-    return this;
+  private CompletableFuture<ExecutionUpdate<S, SMC>> runSinkState(State.To<S, ?> to, boolean isSuccess, Class<?> eventType, ExecutorService es) {
+    SinkState<S, SMC, Object>  sinkState = stateMachineDef.getSinkState(to.getState());
+    if (!sinkState.isActionAsync()) {
+      Object result = sinkState.getAction().apply(context.getStateMachineContext());
+      return CompletableFuture.completedFuture(
+        new SinkStateExecutionUpdate<>(id, step + 1, to.getState(), result, currentState, context.getStateContext(), context.getStateMachineContext(), eventType, isSuccess));
+    } else {
+      CompletableFuture<Object> resultF = sinkState.getAsyncAction().apply(context.getStateMachineContext(), es);
+      return resultF.thenApplyAsync((result) ->
+        new SinkStateExecutionUpdate<>(id, step + 1, to.getState(), result, currentState, context.getStateContext(), context.getStateMachineContext(), eventType, isSuccess), es);
+    }
   }
 
   /**

@@ -37,6 +37,22 @@ class ExecutionProgress {
   }
 
   /**
+   * [getStep description]
+   * @return [description]
+   */
+  public int getStep() {
+    return step;
+  }
+
+  /**
+   * [getStatus description]
+   * @return [description]
+   */
+  public Status getStatus() {
+    return status;
+  }
+
+  /**
    * ]
    * @return [description]
    */

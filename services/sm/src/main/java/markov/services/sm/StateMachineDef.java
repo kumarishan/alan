@@ -142,6 +142,16 @@ public abstract class StateMachineDef<S, SMC> {
   }
 
   /**
+   * [getSinkState description]
+   * @param  state [description]
+   * @return       [description]
+   */
+  @SuppressWarnings("unchecked")
+  public SinkState<S, SMC, Object> getSinkState(S state) {
+    return (SinkState<S, SMC, Object>)sinkStates.get(state);
+  }
+
+  /**
    * [isSuccessState description]
    * @param  name [description]
    * @return      [description]
