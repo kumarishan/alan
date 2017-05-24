@@ -1,6 +1,16 @@
 apply plugin: 'application'
 mainClassName = 'markov.services.sm.Main'
 
+compileJava {
+  options.compilerArgs << '-Xlint:unchecked'
+}
+
 dependencies {
   compile 'joda-time:joda-time:2.9.5'
+  compile 'org.slf4j:slf4j-api:1.7.+'
+  compile 'org.slf4j:slf4j-simple:1.7.+'
+}
+
+task local {
+  run { systemProperty "org.slf4j.simpleLogger.defaultLogLevel", "debug" }
 }
