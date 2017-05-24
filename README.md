@@ -15,18 +15,19 @@ State machine
 - ~~Updating and/or resetting current state and state machine context~~
 - ~~InMemory Lock~~
 - ~~Markov~~
-- Test run (in memory)
+- ~~Test run (in memory)~~
+- ~~Merge to develop~~
 - Code refactoring (class designs)
+  - Logging
   - StateMachienDef arrange functions
-  - Refactor Command based Persistance
+  - Introduce Tape based persistance
+  - Retry/Blocking queue
 - Persistance with Cassandra
 - Lock using Apache Zookeeper
 - Test run (db store)
 - Comments + License + README documentation
-- Logging
 - Configurator and Factories support using typesafe-config
 - Benchmark and Optimizations
-- Merge to develop
 - Test cases
 - Merge to master
 - change the project name to alan
