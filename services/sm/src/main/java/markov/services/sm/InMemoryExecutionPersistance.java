@@ -114,38 +114,30 @@ public final class InMemoryExecutionPersistance<S, SMC> implements ExecutionPers
     return CompletableFuture.completedFuture(res);
   }
 
-  /**
-   * TODO
-   * @param  id [description]
-   * @return    [description]
-   */
-  public CompletableFuture<ExecutionStage<S, ?, SMC>> getExecutionStage(ExecutionId id) {
-    return getExecutionStage(id);
-  }
-
   // wildcard
-  private <SC> CompletableFuture<ExecutionStage<S, SC, SMC>> _getExecutionStage(ExecutionId id) {
+  public CompletableFuture<ExecutionStage<S, Object, SMC>> getExecutionStage(ExecutionId id) {
     Progress progress = progresses.get(id);
     int step = progress.step;
     Stage stage = stages.get(id).get(step);
     StateContext currentContext = stateContexts.get(id).get(step).get(stage.currentState);
-
     S currentState = stateMachineDef.stateNameFor(stage.currentState);
     S previousState = stateMachineDef.stateNameFor(stage.previousState);
 
     byte[] smcBinary = stateMachineContexts.get(id).get(step);
-    SC stateContext = stateMachineDef.deserializeStateContext(currentState, currentContext.binary);
+    Object stateContext = stateMachineDef.deserializeStateContext(currentState, currentContext.binary);
     SMC stateMachineContext = stateMachineDef.deserializeStateMachineContext(smcBinary);
-    StateMachineDef.Context<S, SC, SMC> context = new StateMachineDef.Context<>(currentState, stateContext, stateMachineContext, stateMachineDef);
+    StateMachineDef.Context<S, Object, SMC> context = new StateMachineDef.Context<>(currentState, stateContext, stateMachineContext, stateMachineDef);
 
-    Class<?> prevTriggerEventType;
-    try {
-      prevTriggerEventType = Class.forName(stage.triggerEventType);
-    } catch (ClassNotFoundException ex) {
-      return CompletableFuture.completedFuture(null);
+    Class<?> prevTriggerEventType = null;
+    if (stage.triggerEventType != null) {
+      try {
+        prevTriggerEventType = Class.forName(stage.triggerEventType);
+      } catch (ClassNotFoundException ex) {
+        return CompletableFuture.completedFuture(null);
+      }
     }
 
-    ExecutionStage<S, SC, SMC> res = new ExecutionStage<>(id, step, stateMachineDef, currentState, context, previousState, prevTriggerEventType);
+    ExecutionStage<S, Object, SMC> res = new ExecutionStage<>(id, step, stateMachineDef, currentState, context, previousState, prevTriggerEventType);
     return CompletableFuture.completedFuture(res);
   }
 

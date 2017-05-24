@@ -76,11 +76,6 @@ class ExecutionUpdate<S, SMC> {
     this.stateMachineContext = stateMachineContext;
     this.status = status;
   }
-
-  public ExecutionId getId() { return id; }
-  public int getStep() { return step; }
-  public SMC getStateMachineContext() { return stateMachineContext; }
-  public ExecutionProgress.Status getStatus() { return status; }
 }
 
 /**
@@ -323,6 +318,6 @@ class StopExecutionUpdate<S, SCR, SMC> extends ExecutionUpdate<S, SMC> {
  */
 interface ExecutionPersistance<S, SMC> {
   public CompletableFuture<ExecutionProgress> getExecutionProgress(ExecutionId id);
-  public CompletableFuture<ExecutionStage<S, ?, SMC>> getExecutionStage(ExecutionId id);
+  public CompletableFuture<ExecutionStage<S, Object, SMC>> getExecutionStage(ExecutionId id);
   public CompletableFuture<Boolean> updateExecution(ExecutionUpdate<S, SMC> update);
 }

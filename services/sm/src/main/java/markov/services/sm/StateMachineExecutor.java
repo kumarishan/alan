@@ -68,7 +68,7 @@ public class StateMachineExecutor<S, SMC> {
         failureThreshold <= 0 || failureThreshold > MAX_FAILURE_THRESHOLD)
       throw new IllegalArgumentException();
 
-
+    this.maxWaitForAction = maxWaitForAction;
     this.stateMachineDef = stateMachineDef;
     this.stateMachineExecutorService = stateMachineDef.createExecutorService();
     this.taskQueue = new LinkedBlockingQueue<>();
@@ -77,7 +77,7 @@ public class StateMachineExecutor<S, SMC> {
                                         (t, e) -> {}, // TODO
                                         true); // true -> FIFO
     this.scheduler = new ScheduledThreadPoolExecutor(parallelism); // [TODO]
-    this.status = (-parallelism) | ((-failureThreshold) << FC_SHIFT);
+    this.status = ((-parallelism) & EC_MASK) | (((-failureThreshold) << FC_SHIFT) & FC_MASK);
     this.persistance = new InMemoryExecutionPersistance<>(stateMachineDef, this.forkJoinPool);
   }
 
@@ -212,7 +212,7 @@ public class StateMachineExecutor<S, SMC> {
     int s;
     StateExecutionAction<S, SMC> action = newAction();
     while ((s = status) > 0 && (byte)(s >> FC_SHIFT) < 0 && (short)s < 0) {
-      if (!U.compareAndSwapInt(this, STATUS_OFFSET, s, s + EC_UNIT)) {
+      if (U.compareAndSwapInt(this, STATUS_OFFSET, s, s + EC_UNIT)) {
         tryRunExecution(action);
         break;
       }
@@ -318,10 +318,12 @@ public class StateMachineExecutor<S, SMC> {
 
   // bounds
   private static final int BMASK = 0x00ff; // byte bits
+  private static final int SMASK = 0xffff;
   private static final int MAX_PARALLEL = 0x7fff;
   private static final int MAX_FAILURE_THRESHOLD = 0x7f;
 
   // masks
+  private static final int EC_MASK  = SMASK;
   private static final int FC_MASK  = BMASK << FC_SHIFT;
   private static final int RESET_FC = ~FC_MASK;
 
@@ -459,8 +461,13 @@ public class StateMachineExecutor<S, SMC> {
           case FAILED: break;
         }
 
-        executor.tryRunExecution(this);
+        executor.tryRunExecution(new StateExecutionAction<>(executor));
       }, es);
+
+      mainF.exceptionally((exception) -> {
+        exception.printStackTrace();
+        return ExecutionResult.FAILED;
+      });
 
       executor.watch(mainF);
     }
@@ -505,9 +512,9 @@ public class StateMachineExecutor<S, SMC> {
                   }, es)
           , es)
       .exceptionally((exception) -> {
-        if (exception instanceof UnhandledEventException)
+        if (exception.getCause() instanceof UnhandledEventException)
           return ExecutionResult.FAILED_UNHANDLED_EVENT;
-        else if (exception instanceof InvalidStateTransitionException)
+        else if (exception.getCause() instanceof InvalidStateTransitionException)
           return ExecutionResult.FAILED_INVALID_TRANSITION;
         else
           return ExecutionResult.FAILED;

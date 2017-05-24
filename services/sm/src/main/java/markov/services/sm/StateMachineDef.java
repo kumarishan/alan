@@ -45,8 +45,6 @@ public abstract class StateMachineDef<S, SMC> {
   private RuntimeExceptionHandler<S, SMC> runtimeExceptionHandler;
   private Supplier<SMC> stateMachineContextFactory;
   private Supplier<ExecutorService> executorServiceFactory;
-  private ContextSerializer<SMC> stateMachineContextSerializer;
-  private ContextDeserializer<SMC> stateMachineContextDeserializer;
   private Class<SMC> stateMachineContextType;
 
   private final Map<Class<?>, Function<?, ExecutionId>> executionIdFactories;
@@ -149,7 +147,10 @@ public abstract class StateMachineDef<S, SMC> {
    * @return      [description]
    */
   public final boolean isSuccessState(S name) {
-    return sinkStates.get(name).isSuccess();
+    if (sinkStates.containsKey(name))
+      return sinkStates.get(name).isSuccess();
+    else
+      return false;
   }
 
   /**
@@ -158,7 +159,10 @@ public abstract class StateMachineDef<S, SMC> {
    * @return      [description]
    */
   public final boolean isFailureState(S name) {
-    return !isSuccessState(name);
+    if (sinkStates.containsKey(name))
+      return !sinkStates.get(name).isSuccess();
+    else
+      return false;
   }
 
   /**
@@ -177,7 +181,7 @@ public abstract class StateMachineDef<S, SMC> {
 
     for (State.Transition<S, E, SC, SMC> trn : transitions) {
       if (trn.check(event, context)) {
-        trn = transition;
+        transition = trn;
         break;
       }
     }
@@ -492,8 +496,9 @@ public abstract class StateMachineDef<S, SMC> {
    * @param  context [description]
    * @return         [description]
    */
+  @SuppressWarnings("unchecked")
   public byte[] serializeStateMachineContext(SMC context) {
-    return stateMachineContextSerializer.apply(context);
+    return ((ContextSerializer<SMC>)serializers.get(context.getClass())).apply(context);
   }
 
   /**
@@ -517,8 +522,9 @@ public abstract class StateMachineDef<S, SMC> {
    * @param  binary [description]
    * @return        [description]
    */
+  @SuppressWarnings("unchecked")
   public SMC deserializeStateMachineContext(byte[] binary) {
-    return stateMachineContextDeserializer.apply(binary);
+    return (SMC)deserializers.get(stateMachineContextType).apply(binary);
   }
 
   /**
