@@ -6,7 +6,7 @@ import java.util.concurrent.ExecutorService;
 
 
 /**
- * Creates a Markov service
+ * Creates a Alan service
  * - a rest service to recieve events
  * - json mappers to/from events
  * - connections to other markov service in the cluster and monitor
@@ -14,13 +14,13 @@ import java.util.concurrent.ExecutorService;
  * - configurations
  *   - num threads
  */
-public class Markov {
+public class Alan {
 
-  private final MarkovConfig config;
+  private final AlanConfig config;
   private final Dispatcher dispatcher;
   private final ExecutorService executorService;
 
-  public Markov(MarkovConfig config) {
+  public Alan(AlanConfig config) {
     this.config = config;
     this.dispatcher = new Dispatcher();
     this.executorService = new ForkJoinPool();
@@ -66,7 +66,7 @@ public class Markov {
 
 // TODO
 class Seed {}
-class MarkovConfig {
+class AlanConfig {
   String host;
   int port;
   List<Seed> seeds;

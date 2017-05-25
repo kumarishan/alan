@@ -250,8 +250,8 @@ public class Main {
 
   public static void main(String[] args) {
 
-    MarkovConfig config = new MarkovConfig();
-    Markov markov = new Markov(config);
+    AlanConfig config = new AlanConfig();
+    Alan markov = new Alan(config);
 
     Turnstile fsm = new Turnstile();
     markov.add(fsm, 4);
