@@ -1,4 +1,4 @@
-package markov.services.sm;
+package alan.statemachine;
 
 import java.util.List;
 import java.util.concurrent.ForkJoinPool;
@@ -70,5 +70,4 @@ class MarkovConfig {
   String host;
   int port;
   List<Seed> seeds;
-  EventJsonMappers serializers;
 }
