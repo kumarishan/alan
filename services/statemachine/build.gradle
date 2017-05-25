@@ -1,5 +1,5 @@
 apply plugin: 'application'
-mainClassName = 'markov.services.sm.Main'
+mainClassName = 'alan.statemachine.Main'
 
 compileJava {
   options.compilerArgs << '-Xlint:unchecked'

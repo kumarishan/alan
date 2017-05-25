@@ -1,4 +1,4 @@
-package markov.services.sm;
+package alan.statemachine;
 
 import java.util.Random;
 import java.util.concurrent.ForkJoinPool;
@@ -8,9 +8,9 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static markov.services.sm.Turnstile.State.*;
-import static markov.services.sm.Turnstile.State;
-import static markov.services.sm.Turnstile.*;
+import static alan.statemachine.Turnstile.State.*;
+import static alan.statemachine.Turnstile.State;
+import static alan.statemachine.Turnstile.*;
 
 /**
  *
@@ -250,8 +250,8 @@ public class Main {
 
   public static void main(String[] args) {
 
-    MarkovConfig config = new MarkovConfig();
-    Markov markov = new Markov(config);
+    AlanConfig config = new AlanConfig();
+    Alan markov = new Alan(config);
 
     Turnstile fsm = new Turnstile();
     markov.add(fsm, 4);

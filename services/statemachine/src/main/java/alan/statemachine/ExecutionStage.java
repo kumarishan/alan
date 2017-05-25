@@ -1,4 +1,4 @@
-package markov.services.sm;
+package alan.statemachine;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;

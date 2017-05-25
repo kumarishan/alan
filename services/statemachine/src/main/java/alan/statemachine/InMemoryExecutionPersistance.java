@@ -1,4 +1,4 @@
-package markov.services.sm;
+package alan.statemachine;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -10,7 +10,7 @@ import java.util.HashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static markov.services.sm.ExecutionProgress.Status;
+import static alan.statemachine.ExecutionProgress.Status;
 
 /**
  *

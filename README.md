@@ -1,4 +1,4 @@
-# markov (after 0.1.0 change to alan)
+# alan
 State machine
 
 ## Dev updates
@@ -17,6 +17,7 @@ State machine
 - ~~Markov~~
 - ~~Test run (in memory)~~
 - ~~Merge to develop~~
+- ~~change the project name to alan~~
 - Code refactoring (class designs)
   - Logging
   - StateMachienDef arrange functions
@@ -30,7 +31,6 @@ State machine
 - Benchmark and Optimizations
 - Test cases
 - Merge to master
-- change the project name to alan
 
 ## Features
 ### 0.1.0
