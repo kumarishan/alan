@@ -3,6 +3,8 @@ package alan.statemachine;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
+import alan.core.ExecutionId;
+
 import static alan.statemachine.ExecutionProgress.Status;
 
 
@@ -334,6 +336,5 @@ class StopExecutionUpdate<S, SCR, SMC> extends ExecutionUpdate<S, SMC> {
  */
 interface ExecutionPersistance<S, SMC> {
   public CompletableFuture<ExecutionProgress> getExecutionProgress(ExecutionId id);
-  public CompletableFuture<ExecutionStage<S, Object, SMC>> getExecutionStage(ExecutionId id);
   public CompletableFuture<Boolean> updateExecution(ExecutionUpdate<S, SMC> update);
 }

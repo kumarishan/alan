@@ -10,7 +10,10 @@ import java.util.HashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ConcurrentHashMap;
 
+import alan.core.ExecutionId;
+
 import static alan.statemachine.ExecutionProgress.Status;
+
 
 /**
  *
@@ -111,33 +114,6 @@ public final class InMemoryExecutionPersistance<S, SMC> implements ExecutionPers
       res = new ExecutionProgress(id, 1, Status.NEW);
     }
 
-    return CompletableFuture.completedFuture(res);
-  }
-
-  // wildcard
-  public CompletableFuture<ExecutionStage<S, Object, SMC>> getExecutionStage(ExecutionId id) {
-    Progress progress = progresses.get(id);
-    int step = progress.step;
-    Stage stage = stages.get(id).get(step);
-    StateContext currentContext = stateContexts.get(id).get(step).get(stage.currentState);
-    S currentState = stateMachineDef.stateNameFor(stage.currentState);
-    S previousState = stateMachineDef.stateNameFor(stage.previousState);
-
-    byte[] smcBinary = stateMachineContexts.get(id).get(step);
-    Object stateContext = stateMachineDef.deserializeStateContext(currentState, currentContext.binary);
-    SMC stateMachineContext = stateMachineDef.deserializeStateMachineContext(smcBinary);
-    StateMachineDef.Context<S, Object, SMC> context = new StateMachineDef.Context<>(currentState, stateContext, stateMachineContext, stateMachineDef);
-
-    Class<?> prevTriggerEventType = null;
-    if (stage.triggerEventType != null) {
-      try {
-        prevTriggerEventType = Class.forName(stage.triggerEventType);
-      } catch (ClassNotFoundException ex) {
-        return CompletableFuture.completedFuture(null);
-      }
-    }
-
-    ExecutionStage<S, Object, SMC> res = new ExecutionStage<>(id, step, stateMachineDef, currentState, context, previousState, prevTriggerEventType);
     return CompletableFuture.completedFuture(res);
   }
 

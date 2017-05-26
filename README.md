@@ -1,6 +1,21 @@
 # alan
 State machine
 
+## How ? State Machine, Pushdown Automata, Turing Machine
+- State Machine
+  - any time can access only current state and state machine (global) context
+  - therefore limited memory
+  - cannot affect execution of other states using state context
+  - only next state can be affected using override context operation
+- Pushdown Automata
+  - introduces pop operation
+  - push multiple symbols on tape
+  - each symbol update only one state context and state machine context
+- Turing
+  - at any time access to all state context
+  - change any and push any number
+  - one state can affect later execution of other states
+
 ## Dev updates
 ### 0.1.0
 - ~~Dispatcher~~

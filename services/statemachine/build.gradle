@@ -2,7 +2,7 @@ apply plugin: 'application'
 mainClassName = 'alan.statemachine.Main'
 
 compileJava {
-  options.compilerArgs << '-Xlint:unchecked'
+  options.compilerArgs << '-Xlint:unchecked' << '-Xdiags:verbose'
 }
 
 dependencies {

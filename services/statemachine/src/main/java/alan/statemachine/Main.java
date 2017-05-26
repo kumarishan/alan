@@ -8,6 +8,8 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import alan.core.ExecutionId;
+
 import static alan.statemachine.Turnstile.State.*;
 import static alan.statemachine.Turnstile.State;
 import static alan.statemachine.Turnstile.*;
@@ -239,9 +241,6 @@ class Turnstile extends StateMachineDef<Turnstile.State, TurnstileContext> {
     return num;
   }
 }
-
-interface CState {};
-class CStateOne implements CState {};
 
 
 public class Main {

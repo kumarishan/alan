@@ -3,6 +3,8 @@ package alan.statemachine;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import alan.core.ExecutionId;
+
 
 interface ExecutionLock {
   public CompletableFuture<Boolean> acquire();

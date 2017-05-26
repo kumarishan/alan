@@ -362,8 +362,8 @@ class State<S, SC> {
    *
    */
   public static class To<S, SC> {
-    private final S state;
-    private final SC contextOverride;
+    final S state;
+    final SC contextOverride;
 
     public To(S state, SC contextOverride) {
       this.state = state;
@@ -372,14 +372,6 @@ class State<S, SC> {
 
     public To(S state) {
       this(state, null);
-    }
-
-    public S getState() {
-      return state;
-    }
-
-    public SC getContextOverride() {
-      return contextOverride;
     }
 
     public <SC1> To<S, SC1> override(SC1 context) {
@@ -391,7 +383,7 @@ class State<S, SC> {
    *
    */
   public static class Stop<S> extends To<S, Object> {
-    private final Throwable exception;
+    final Throwable exception;
 
     public Stop() {
       super(null, null);
@@ -401,10 +393,6 @@ class State<S, SC> {
     public Stop(Throwable exception) {
       super(null, null);
       this.exception = exception;
-    }
-
-    public Throwable getException() {
-      return this.exception;
     }
   }
 

@@ -9,6 +9,8 @@ import java.util.function.Function;
 import java.util.function.BiFunction;
 import java.util.concurrent.CompletableFuture;
 
+import alan.core.ExecutionId;
+
 
 /**
  *
@@ -486,8 +488,8 @@ public abstract class StateMachineDef<S, SMC> {
    * @return         [description]
    */
   @SuppressWarnings("unchecked")
-  public <SC> byte[] serializeStateContext(Class<SC> clazz, SC context) {
-    return ((ContextSerializer<SC>)serializers.get(clazz)).apply(context);
+  public byte[] serializeStateContext(Class<?> clazz, Object context) {
+    return ((ContextSerializer<Object>)serializers.get(clazz)).apply(context);
   }
 
   /**
@@ -499,6 +501,17 @@ public abstract class StateMachineDef<S, SMC> {
   @SuppressWarnings("unchecked")
   public <SC> byte[] serializeStateContext(S state, SC context) {
     return serializeStateContext((Class<SC>)states.get(state).getContextType(), context);
+  }
+
+  /**
+   * [serializeSinkStateResult description]
+   * @param  clazz  [description]
+   * @param  result [description]
+   * @return        [description]
+   */
+  @SuppressWarnings("unchecked")
+  public byte[] serializeSinkStateResult(Class<?> clazz, Object result) {
+    return ((ContextSerializer<Object>)serializers.get(clazz)).apply(result);
   }
 
   /**
