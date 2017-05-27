@@ -12,10 +12,4 @@ public class ExecutionId {
     this.uuid = uuid;
   }
 
-  public static SchemaRow toSchemaRow(ExecutionId id) {
-    SchemaRow row = new SchemaRow();
-    row.put("mname", String.class, id.mname);
-    row.put("uuid", String.class, id.uuid);
-    return row;
-  }
 };

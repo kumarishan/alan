@@ -76,27 +76,6 @@ class Turnstile extends StateMachineDef<Turnstile.State, TurnstileContext> {
     }
   }
 
-  // static class MyExecutionId implements ExecutionId {
-  //   String turnstile;
-  //   public MyExecutionId(String turnstile) {
-  //     this.turnstile = turnstile;
-  //   }
-
-  //   @Override
-  //   public int hashCode() {
-  //     return turnstile.hashCode();
-  //   }
-
-  //   @Override
-  //   public boolean equals(Object other) {
-  //     return (other instanceof MyExecutionId && turnstile.equals(((MyExecutionId)other).turnstile));
-  //   }
-
-  //   public String toString() {
-  //     return turnstile;
-  //   }
-  // }
-
   Logger logger = LoggerFactory.getLogger(this.getClass());
 
   {

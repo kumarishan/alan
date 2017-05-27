@@ -27,6 +27,8 @@ public abstract class Tape {
     return status == SUCCEEDED || status == FAILED || status == STOPPED;
   }
 
+  public abstract SchemaRow toSchemaRow();
+
   public static enum Status {
     NEW, LIVE, FAILED, SUCCEEDED, STOPPED;
   }
