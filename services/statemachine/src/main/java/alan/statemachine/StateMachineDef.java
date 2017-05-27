@@ -112,20 +112,13 @@ public abstract class StateMachineDef<S, SMC> {
   }
 
   /**
-   * [getStartContext description]
+   * [getStartStateContext description]
    * @return [description]
    */
-  public StateMachineDef.Context<S, ?, SMC> getStartContext() {
-    return _getStartContext();
-  }
-
-  // wild card capture
-  private <SC> StateMachineDef.Context<S, SC, SMC> _getStartContext() {
+  public Object getStartStateContext() {
     @SuppressWarnings("unchecked")
-    State<S, SC> state = (State<S, SC>)states.get(getStartState());
-    SC stateContext = state.createContext();
-    SMC stateMachineContext = stateMachineContextFactory.get();
-    return new StateMachineDef.Context<>(getStartState(), stateContext, stateMachineContext, this);
+    State<S, Object> state = (State<S, Object>)states.get(getStartState());
+    return state.createContext();
   }
 
   /**
@@ -492,6 +485,11 @@ public abstract class StateMachineDef<S, SMC> {
     return ((ContextSerializer<Object>)serializers.get(clazz)).apply(context);
   }
 
+  @SuppressWarnings("unchecked")
+  public byte[] serializeStateContext(Object context) {
+    return ((ContextSerializer<Object>)serializers.get(context.getClass())).apply(context);
+  }
+
   /**
    * [serializeStateContext description]
    * @param  state   [description]
@@ -510,8 +508,8 @@ public abstract class StateMachineDef<S, SMC> {
    * @return        [description]
    */
   @SuppressWarnings("unchecked")
-  public byte[] serializeSinkStateResult(Class<?> clazz, Object result) {
-    return ((ContextSerializer<Object>)serializers.get(clazz)).apply(result);
+  public byte[] serializeSinkStateResult(Object result) {
+    return ((ContextSerializer<Object>)serializers.get(result.getClass())).apply(result);
   }
 
   /**
@@ -568,7 +566,7 @@ public abstract class StateMachineDef<S, SMC> {
   }
 
   /**
-   *
+   * [RENAME]
    */
   final static class Context<S, SC, SMC> {
     private SC stateContext;

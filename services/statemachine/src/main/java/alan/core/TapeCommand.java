@@ -10,20 +10,20 @@ public abstract class TapeCommand<R> {
     return new ReleaseLock(id);
   }
 
-  public static DiffPush DiffPush(ExecutionId id) {
-    return new DiffPush(id);
+  public static DiffPush DiffPush(ExecutionId id, Tape tape) {
+    return new DiffPush(id, tape);
   }
 
-  public static Peek Peek(ExecutionId id, int step) {
-    return new Peek(id, step);
+  public static Peek Peek(ExecutionId id) {
+    return new Peek(id);
   }
 
   public static AcquireLock AcquireLock(ExecutionId id) {
     return new AcquireLock(id);
   }
 
-  public static GetStatus GetStatus(ExecutionId id) {
-    return new GetStatus(id);
+  public static GetStateContext GetStateContext(ExecutionId id, String state) {
+    return new GetStateContext(id, state);
   }
 
 
@@ -34,8 +34,10 @@ public abstract class TapeCommand<R> {
   }
 
   static class DiffPush extends TapeCommand<Boolean> {
-    public DiffPush(ExecutionId id) {
+    Tape tape;
+    public DiffPush(ExecutionId id, Tape tape) {
       super(id);
+      this.tape = tape;
     }
   }
 
@@ -43,10 +45,8 @@ public abstract class TapeCommand<R> {
    *
    */
   public static class Peek<T> extends TapeCommand<T> {
-    private final int step;
-    public Peek(ExecutionId id, int step) {
+    public Peek(ExecutionId id) {
       super(id);
-      this.step = step;
     }
   }
 
@@ -63,11 +63,12 @@ public abstract class TapeCommand<R> {
   /**
    *
    */
-  public static class GetStatus extends TapeCommand<Tape.Status> {
-    public GetStatus(ExecutionId id) {
+  public static class GetStateContext extends TapeCommand<byte[]> {
+    String state;
+    public GetStateContext(ExecutionId id, String state) {
       super(id);
+      this.state = state;
     }
-
   }
 
   /**
@@ -77,14 +78,12 @@ public abstract class TapeCommand<R> {
     public AcquireLock(ExecutionId id) {
       super(id);
     }
-
   }
 
   public static class ReleaseLock extends TapeCommand<Boolean> {
     public ReleaseLock(ExecutionId id) {
       super(id);
     }
-
   }
 
 }
