@@ -107,7 +107,7 @@ public class StateMachineExecutor<S, SMC> {
    * @return [description]
    */
   public final String getStateMachineId() {
-    return stateMachineDef.getId();
+    return stateMachineDef.getName();
   }
 
   /**

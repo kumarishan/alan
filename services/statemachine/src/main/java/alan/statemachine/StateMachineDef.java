@@ -42,14 +42,14 @@ interface RuntimeExceptionHandler<S, SMC> {
  */
 public abstract class StateMachineDef<S, SMC> {
 
-  private String id;
+  private String name;
   private S startState;
   private RuntimeExceptionHandler<S, SMC> runtimeExceptionHandler;
   private Supplier<SMC> stateMachineContextFactory;
   private Supplier<ExecutorService> executorServiceFactory;
   private Class<SMC> stateMachineContextType;
 
-  private final Map<Class<?>, Function<?, ExecutionId>> executionIdFactories;
+  private final Map<Class<?>, Function<?, String>> executionIdFactories;
   private final Map<S, State<S, ?>> states;
   private final Map<S, SinkState<S, SMC, ?>> sinkStates;
   private final Map<String, S> nameToState;
@@ -75,8 +75,8 @@ public abstract class StateMachineDef<S, SMC> {
    * [getId description]
    * @return [description]
    */
-  public String getId() {
-    return this.id;
+  public String getName() {
+    return this.name;
   }
 
   /**
@@ -97,10 +97,10 @@ public abstract class StateMachineDef<S, SMC> {
    */
   public <E> ExecutionId getExecutionId(E event) {
     @SuppressWarnings("unchecked")
-    Function<E, ExecutionId> factory = (Function<E, ExecutionId>) executionIdFactories.get(event.getClass());
+    Function<E, String> factory = (Function<E, String>) executionIdFactories.get(event.getClass());
     if (factory == null)
       throw new NullPointerException("No factory method specified to create execution id for the event " + event.getClass().getName());
-    return factory.apply(event);
+    return new ExecutionId(name, factory.apply(event));
   }
 
   /**
@@ -232,8 +232,8 @@ public abstract class StateMachineDef<S, SMC> {
    * [id description]
    * @param id [description]
    */
-  protected void id(String id) {
-    this.id = id;
+  protected void name(String id) {
+    this.name = name;
   }
 
   /**
@@ -250,7 +250,7 @@ public abstract class StateMachineDef<S, SMC> {
    * @param  factory   [description]
    * @return           [description]
    */
-  protected <E> void executionIdFor(Class<E> eventType, Function<E, ExecutionId> factory) {
+  protected <E> void executionIdFor(Class<E> eventType, Function<E, String> factory) {
     executionIdFactories.put(eventType, factory);
   }
 
@@ -406,8 +406,8 @@ public abstract class StateMachineDef<S, SMC> {
    * [verify description]
    */
   protected final void verify() {
-    if (this.id == null)
-      throw new IllegalArgumentException("State Machine id not specified");
+    if (this.name == null)
+      throw new IllegalArgumentException("State Machine name not specified");
     checkStates();
     checkStateMachineContext();
     checkSinkStates();
