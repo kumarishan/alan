@@ -15,6 +15,7 @@ import static alan.core.Machine.Response;
 import static alan.statemachine.State.Transition;
 import static alan.core.TapeCommand.*;
 import static alan.core.Tape.ContextLabel;
+import static alan.util.FutureUtil.completedF;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -312,10 +313,4 @@ class StateMachine<S, SMC> implements Machine {
       return this.id.equals(o.id) && getName().equals(o.getName());
     }
   }
-
-  // to utils
-  private <T> CompletableFuture<T> completedF(T res) {
-    return CompletableFuture.completedFuture(res);
-  }
-
 }

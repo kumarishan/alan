@@ -41,7 +41,7 @@ class ExecutionException extends Exception {
  */
 public class StateMachineExecutor<S, SMC> {
 
-  private final Logger logger = LoggerFactory.getLogger(this.getClass());
+  private static final Logger LOG = LoggerFactory.getLogger(StateMachineExecutor.class);
 
   private volatile int status = 0;
   private final LinkedBlockingQueue<ExecutionTask> taskQueue;
@@ -164,7 +164,7 @@ public class StateMachineExecutor<S, SMC> {
     }, this.maxWaitForAction, TimeUnit.MILLISECONDS);
   }
 
-  ///////////////////////////// Event Execution Methods ///////////////////////////////////////////
+  ///////////////////////////// Event ExeLOGcution Methods ///////////////////////////////////////////
 
   /**
    * [newAction description]
@@ -384,7 +384,7 @@ public class StateMachineExecutor<S, SMC> {
     private final StateMachineDef<S, SMC> stateMachineDef;
     private final ForkJoinPool es;
 
-    Logger logger = LoggerFactory.getLogger(this.getClass());
+    private static final Logger LOG = LoggerFactory.getLogger(StateExecutionAction.class);
 
     public StateExecutionAction(StateMachineExecutor<S, SMC> executor) {
       this.executor = executor;
@@ -409,7 +409,6 @@ public class StateMachineExecutor<S, SMC> {
           return FAILED;
         })
         .thenAcceptAsync((response) -> {
-          logger.debug("Task {} ended with {}", task.id, response);
           switch (response) {
             case SUCCESS: break; // TODO
             case RETRY_TASK:

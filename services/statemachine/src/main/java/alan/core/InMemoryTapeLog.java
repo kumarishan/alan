@@ -18,6 +18,7 @@ import alan.core.Tape;
 import alan.core.ExecutionLock;
 import alan.core.InMemoryExecutionLock;
 
+import static alan.util.FutureUtil.completedF;
 import static alan.core.TapeCommand.*;
 
 import org.slf4j.Logger;
@@ -159,14 +160,4 @@ public class InMemoryTapeLog<T extends Tape> implements TapeLog<T> {
     if (lock == null) return completedF(true);
     return lock.release();
   }
-
-  /**
-   * [completedF description]
-   * @param  value [description]
-   * @return       [description]
-   */
-  private <T> CompletableFuture<T> completedF(T value) {
-    return CompletableFuture.completedFuture(value);
-  }
-
 }
