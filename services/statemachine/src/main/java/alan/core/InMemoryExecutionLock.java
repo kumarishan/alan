@@ -1,27 +1,26 @@
-package alan.statemachine;
+package alan.core;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import alan.core.ExecutionId;
-
-
-interface ExecutionLock {
-  public CompletableFuture<Boolean> acquire();
-  public CompletableFuture<Boolean> release();
-  public boolean isLocked();
-}
-
 /**
  * TODO
  */
-class InMemoryExecutionLock implements ExecutionLock {
+public class InMemoryExecutionLock implements ExecutionLock {
   private AtomicBoolean locked;
   private final ExecutionId id;
 
   public InMemoryExecutionLock(ExecutionId id) {
     this.id = id;
     this.locked = new AtomicBoolean(false);
+  }
+
+  /**
+   * [getId description]
+   * @return [description]
+   */
+  public ExecutionId getId() {
+    return id;
   }
 
   /**

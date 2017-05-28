@@ -55,11 +55,6 @@ public class StateMachineExecutor<S, SMC> {
 
   private final ExecutionPersistance<S, SMC> persistance;
 
-  private final ConcurrentMap<ExecutionId, ExecutionLock> locks;
-  {
-    locks = new ConcurrentHashMap<>();
-  }
-
   /**
    * [StateMachineExecutor description]
    * @param  stateMachineDef  [description]
@@ -243,21 +238,6 @@ public class StateMachineExecutor<S, SMC> {
           !U.compareAndSwapInt(this, STATUS_OFFSET, s, s + FC_UNIT));
       }
     }
-  }
-
-  /**
-   * [getLock description]
-   * @param  id [description]
-   * @return    [description]
-   */
-  private final ExecutionLock getLock(ExecutionId id) {
-    ExecutionLock lock = locks.get(id);
-    if (lock == null) {
-      lock = new InMemoryExecutionLock(id);
-      ExecutionLock old = locks.putIfAbsent(id, lock);
-      if (old != null) lock = old;
-    }
-    return lock;
   }
 
   ////////////////////////////// Status Methods ////////////////////////////////////////////
