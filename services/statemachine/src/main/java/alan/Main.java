@@ -11,6 +11,11 @@ import org.slf4j.LoggerFactory;
 import alan.core.Alan;
 import alan.core.AlanConfig;
 import alan.core.ExecutionId;
+import alan.core.TapeLog;
+import alan.core.InMemoryTapeLog;
+import alan.core.Tape;
+import alan.statemachine.StateMachineSchema;
+import alan.statemachine.StateMachineTape;
 import alan.statemachine.StateMachineDef;
 
 import static alan.Turnstile.State.*;
@@ -232,11 +237,11 @@ public class Main {
   public static void main(String[] args) {
 
     AlanConfig config = new AlanConfig();
-    Alan markov = new Alan(config);
+    Alan alan = new Alan(config);
 
     Turnstile fsm = new Turnstile();
-    markov.add(fsm, 4);
-    markov.start();
+    alan.add(fsm, InMemoryTapeLog.factory, 4);
+    alan.start();
 
     EventOne one1 = new EventOne("t-1", 1);
     EventOne one2 = new EventOne("t-1", 2);
@@ -251,7 +256,7 @@ public class Main {
     int period = 1000;
     for (int i = 0; i < 15; i++) {
       scheduler.schedule(() -> {
-        markov.send(events[random.nextInt(4)]);
+        alan.send(events[random.nextInt(4)]);
       }, delay, TimeUnit.MILLISECONDS);
       delay += period;
     }

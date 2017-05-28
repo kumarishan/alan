@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.Comparator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import alan.core.TapeLog;
 import alan.core.Schema;
@@ -21,15 +23,24 @@ import alan.core.InMemoryExecutionLock;
 import static alan.util.FutureUtil.completedF;
 import static alan.core.TapeCommand.*;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 
 /**
  *
  */
 public class InMemoryTapeLog<T extends Tape> implements TapeLog<T> {
   private static Logger LOG = LoggerFactory.getLogger(InMemoryTapeLog.class);
+
+  ////////////////////////////// Factory /////////////////////////////
+
+  private static class Factory implements TapeLog.Factory {
+    public <T extends Tape> TapeLog<T> create(Schema<T> schema, ExecutorService service) {
+      return new InMemoryTapeLog<>(schema, service);
+    }
+  }
+
+  public static TapeLog.Factory factory = new Factory();
+
+  ////////////////////////////////////////////////////////////////////
 
   private final ExecutorService executor;
   private final Schema<T> schema;

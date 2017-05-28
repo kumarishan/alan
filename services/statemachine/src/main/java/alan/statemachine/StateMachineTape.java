@@ -12,7 +12,7 @@ import static alan.core.Tape.ContextLabel;
 /**
  *
  */
-abstract class StateMachineTape extends Tape {
+public abstract class StateMachineTape extends Tape {
 
   public StateMachineTape(ExecutionId id, int step, Status status, byte[] stateMachineContext) {
     super(id, step, status, stateMachineContext);

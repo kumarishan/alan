@@ -1,4 +1,4 @@
-package alan.statemachine;
+package alan.core;
 
 import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
@@ -15,10 +15,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import alan.core.ExecutionId;
-import alan.core.Machine;
-import alan.core.TapeLog;
-import alan.core.InMemoryTapeLog;
 import alan.util.Unsafe;
 
 import static alan.core.Machine.Response;
@@ -39,14 +35,14 @@ class ExecutionException extends Exception {
  * State Machine executor
  * @ThreadSafe
  */
-public class StateMachineExecutor<S, SMC> {
+public class MachineExecutor<S, SMC, T extends Tape> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(StateMachineExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MachineExecutor.class);
 
   private volatile int status = 0;
   private final LinkedBlockingQueue<ExecutionTask> taskQueue;
 
-  private final StateMachineDef<S, SMC> stateMachineDef;
+  private final MachineDef<S, SMC, T> machineDef;
   private int eventRetries = 3;
   private int maxWaitForAction;
 
@@ -55,66 +51,61 @@ public class StateMachineExecutor<S, SMC> {
   private final ScheduledThreadPoolExecutor scheduler;
 
   // executor service used by state machine internally if any
-  protected final ExecutorService stateMachineExecutorService;
+  protected final ExecutorService exectorService;
 
-  private TapeLog<StateMachineTape> tapeLog;
+  private TapeLog<T> tapeLog;
 
   /**
-   * [StateMachineExecutor description]
-   * @param  stateMachineDef  [description]
+   * [MachineExecutor description]
+   * @param  machineDef  [description]
    * @param  parallelism      [description]
    * @param  failureThreshold [description]
    * @return                  [description]
    */
-  public StateMachineExecutor(StateMachineDef<S, SMC> stateMachineDef, int parallelism, int failureThreshold, int maxWaitForAction) {
+  public MachineExecutor(MachineDef<S, SMC, T> machineDef,
+                         TapeLog.Factory tapeLogFactory,
+                         int parallelism,
+                         int failureThreshold,
+                         int maxWaitForAction) {
     if (parallelism <= 0 || parallelism > MAX_PARALLEL ||
         failureThreshold <= 0 || failureThreshold > MAX_FAILURE_THRESHOLD)
       throw new IllegalArgumentException();
 
     this.maxWaitForAction = maxWaitForAction;
-    this.stateMachineDef = stateMachineDef;
-    this.stateMachineExecutorService = stateMachineDef.createExecutorService();
+    this.machineDef = machineDef;
+    this.exectorService = machineDef.createExecutorService();
     this.taskQueue = new LinkedBlockingQueue<>();
     this.forkJoinPool = new ForkJoinPool(parallelism * ASYNC_TASK_PER_EXECUTION,
                                         ForkJoinPool. defaultForkJoinWorkerThreadFactory,
                                         (t, e) -> {}, // TODO
                                         true); // true -> FIFO
-    this.tapeLog = new InMemoryTapeLog<>(new StateMachineSchema(), forkJoinPool);
+    this.tapeLog = tapeLogFactory.create(machineDef.getSchema(), forkJoinPool);
     this.scheduler = new ScheduledThreadPoolExecutor(parallelism); // [TODO]
     this.status = ((-parallelism) & EC_MASK) | (((-failureThreshold) << FC_SHIFT) & FC_MASK);
-    // this.persistance = new InMemoryExecutionPersistance<>(stateMachineDef, this.forkJoinPool);
   }
 
   /**
-   * [StateMachineExecutor description]
-   * @param  stateMachineDef [description]
+   * [MachineExecutor description]
+   * @param  machineDef [description]
    * @return                 [description]
    */
-  public StateMachineExecutor(StateMachineDef<S, SMC> stateMachineDef) {
-    this(stateMachineDef, Math.min(MAX_PARALLEL, Runtime.getRuntime().availableProcessors()), 10, 60000);
+  public MachineExecutor(MachineDef<S, SMC, T> machineDef, TapeLog.Factory tapeLogFactory) {
+    this(machineDef, tapeLogFactory, Math.min(MAX_PARALLEL, Runtime.getRuntime().availableProcessors()), 10, 60000);
   }
-
-  /**
-   * [getPersistance description]
-   * @return [description]
-   */
-  // public ExecutionPersistance<S, SMC> getPersistance() {
-  //   return persistance;
-  // }
 
   /**
    * [getStateMachineId description]
    * @return [description]
    */
   public final String getStateMachineId() {
-    return stateMachineDef.getName();
+    return machineDef.getName();
   }
 
   /**
    *
    */
   public final Set<Class<?>> getEventTypes() {
-    return stateMachineDef.getEventTypes();
+    return machineDef.getEventTypes();
   }
 
   /**
@@ -183,8 +174,8 @@ public class StateMachineExecutor<S, SMC> {
    *               or is suspended or terminated
    */
   public final boolean receive(Object event) {
-    ExecutionId id = stateMachineDef.getExecutionId(event);
-    Machine machine = new StateMachine<S, SMC>(id, stateMachineDef, tapeLog, forkJoinPool); // [TODO] cached instance
+    ExecutionId id = machineDef.getExecutionId(event);
+    Machine machine = machineDef.createMachine(id, tapeLog, forkJoinPool);
     ExecutionTask task = new ExecutionTask(id, machine, event, eventRetries);
     return receive(task);
   }
@@ -278,7 +269,7 @@ public class StateMachineExecutor<S, SMC> {
   private static long STATUS_OFFSET;
   static {
     try {
-      STATUS_OFFSET = Unsafe.instance.objectFieldOffset(StateMachineExecutor.class.getDeclaredField("status"));
+      STATUS_OFFSET = Unsafe.instance.objectFieldOffset(MachineExecutor.class.getDeclaredField("status"));
     } catch (Throwable t) {
       throw new ExceptionInInitializerError(t);
     }
@@ -380,15 +371,13 @@ public class StateMachineExecutor<S, SMC> {
    * - A ForkJoinTask that gets a State object and the context and runs it by calling the action
    */
   protected static class StateExecutionAction<S, SMC> extends RecursiveAction {
-    private final StateMachineExecutor<S, SMC> executor;
-    private final StateMachineDef<S, SMC> stateMachineDef;
+    private final MachineExecutor<S, SMC, ?> executor;
     private final ForkJoinPool es;
 
     private static final Logger LOG = LoggerFactory.getLogger(StateExecutionAction.class);
 
-    public StateExecutionAction(StateMachineExecutor<S, SMC> executor) {
+    public StateExecutionAction(MachineExecutor<S, SMC, ?> executor) {
       this.executor = executor;
-      this.stateMachineDef = executor.stateMachineDef;
       this.es = executor.forkJoinPool;
     }
 

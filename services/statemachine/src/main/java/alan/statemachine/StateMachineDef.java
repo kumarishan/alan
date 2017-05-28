@@ -10,13 +10,18 @@ import java.util.function.BiFunction;
 import java.util.concurrent.CompletableFuture;
 
 import alan.core.ExecutionId;
+import alan.core.MachineDef;
+import alan.core.Machine;
+import alan.core.Schema;
+import alan.core.TapeLog;
 
 
 /**
  * Sate Machine
  * @Immutable
  */
-public abstract class StateMachineDef<S, SMC> {
+public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, StateMachineTape> {
+  private static Schema<StateMachineTape> schema = new StateMachineSchema();
 
   private String name;
   private S startState;
@@ -71,12 +76,27 @@ public abstract class StateMachineDef<S, SMC> {
    * @param  event [description]
    * @return       [description]
    */
-  public <E> ExecutionId getExecutionId(E event) {
+  public ExecutionId getExecutionId(Object event) {
     @SuppressWarnings("unchecked")
-    Function<E, String> factory = (Function<E, String>) executionIdFactories.get(event.getClass());
+    Function<Object, String> factory = (Function<Object, String>) executionIdFactories.get(event.getClass());
     if (factory == null)
       throw new NullPointerException("No factory method specified to create execution id for the event " + event.getClass().getName());
     return new ExecutionId(name, factory.apply(event));
+  }
+
+  public Schema<StateMachineTape> getSchema() {
+    return schema;
+  }
+
+  /**
+   * [createMachine description]
+   * @param  id       [description]
+   * @param  tapeLog  [description]
+   * @param  executor [description]
+   * @return          [description]
+   */
+  public Machine createMachine(ExecutionId id, TapeLog<StateMachineTape> tapeLog, ExecutorService executor) {
+    return new StateMachine<S, SMC>(id, this, tapeLog, executor);
   }
 
   /**

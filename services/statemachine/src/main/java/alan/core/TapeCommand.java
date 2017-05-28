@@ -1,5 +1,9 @@
 package alan.core;
 
+
+/**
+ * 
+ */
 public abstract class TapeCommand<R> {
   public final ExecutionId id;
   protected TapeCommand(ExecutionId id) {
