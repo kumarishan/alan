@@ -1,8 +1,10 @@
-package alan.statemachine;
+package alan.core;
 
-import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ExecutorService;
+
+import alan.statemachine.StateMachineDef;
+import alan.statemachine.StateMachineExecutor;
 
 
 /**
@@ -62,12 +64,4 @@ public class Alan {
    * [terminate description]
    */
   void terminate() {}
-}
-
-// TODO
-class Seed {}
-class AlanConfig {
-  String host;
-  int port;
-  List<Seed> seeds;
 }

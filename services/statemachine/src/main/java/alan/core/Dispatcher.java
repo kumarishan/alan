@@ -1,4 +1,4 @@
-package alan.statemachine;
+package alan.core;
 
 import java.util.Set;
 import java.util.List;
@@ -16,11 +16,13 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import alan.statemachine.StateMachineExecutor;
+
 
 /**
  * Dispatcher
  */
-class Dispatcher {
+public class Dispatcher {
 
   private final Logger logger = LoggerFactory.getLogger(this.getClass());
 

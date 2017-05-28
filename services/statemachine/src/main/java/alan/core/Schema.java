@@ -82,8 +82,8 @@ public interface Schema<T extends alan.core.Tape> {
      *
      */
     public static class Data<T> {
-      final Class<?> type;
-      final T value;
+      public final Class<?> type;
+      public final T value;
 
       public Data(Class<T> type, T value) {
         this.type = type;

@@ -1,5 +1,5 @@
 apply plugin: 'application'
-mainClassName = 'alan.statemachine.Main'
+mainClassName = 'alan.Main'
 
 compileJava {
   options.compilerArgs << '-Xlint:unchecked' << '-Xdiags:verbose'

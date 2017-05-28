@@ -20,11 +20,16 @@ import alan.core.InMemoryExecutionLock;
 
 import static alan.core.TapeCommand.*;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 /**
- * 
+ *
  */
 public class InMemoryTapeLog<T extends Tape> implements TapeLog<T> {
+  private static Logger LOG = LoggerFactory.getLogger(InMemoryTapeLog.class);
+
   private final ExecutorService executor;
   private final Schema<T> schema;
   private final ConcurrentMap<ExecutionId, ExecutionLock> locks; // [TODO] cache
@@ -107,7 +112,6 @@ public class InMemoryTapeLog<T extends Tape> implements TapeLog<T> {
       }
       cs.put(context.step, context.context);
     }
-
     return completedF(true);
   }
 

@@ -17,6 +17,10 @@ import org.slf4j.LoggerFactory;
 
 import alan.core.ExecutionId;
 import alan.core.Machine;
+import alan.core.TapeLog;
+import alan.core.InMemoryTapeLog;
+import alan.util.Unsafe;
+
 import static alan.core.Machine.Response;
 import static alan.core.Machine.Response.*;
 
@@ -53,7 +57,7 @@ public class StateMachineExecutor<S, SMC> {
   // executor service used by state machine internally if any
   protected final ExecutorService stateMachineExecutorService;
 
-  private final ExecutionPersistance<S, SMC> persistance;
+  private TapeLog<StateMachineTape> tapeLog;
 
   /**
    * [StateMachineExecutor description]
@@ -75,9 +79,10 @@ public class StateMachineExecutor<S, SMC> {
                                         ForkJoinPool. defaultForkJoinWorkerThreadFactory,
                                         (t, e) -> {}, // TODO
                                         true); // true -> FIFO
+    this.tapeLog = new InMemoryTapeLog<>(new StateMachineSchema(), forkJoinPool);
     this.scheduler = new ScheduledThreadPoolExecutor(parallelism); // [TODO]
     this.status = ((-parallelism) & EC_MASK) | (((-failureThreshold) << FC_SHIFT) & FC_MASK);
-    this.persistance = new InMemoryExecutionPersistance<>(stateMachineDef, this.forkJoinPool);
+    // this.persistance = new InMemoryExecutionPersistance<>(stateMachineDef, this.forkJoinPool);
   }
 
   /**
@@ -93,9 +98,9 @@ public class StateMachineExecutor<S, SMC> {
    * [getPersistance description]
    * @return [description]
    */
-  public ExecutionPersistance<S, SMC> getPersistance() {
-    return persistance;
-  }
+  // public ExecutionPersistance<S, SMC> getPersistance() {
+  //   return persistance;
+  // }
 
   /**
    * [getStateMachineId description]
@@ -179,7 +184,7 @@ public class StateMachineExecutor<S, SMC> {
    */
   public final boolean receive(Object event) {
     ExecutionId id = stateMachineDef.getExecutionId(event);
-    Machine machine = new StateMachine<S, SMC>(id, stateMachineDef, forkJoinPool); // [TODO] cached instance
+    Machine machine = new StateMachine<S, SMC>(id, stateMachineDef, tapeLog, forkJoinPool); // [TODO] cached instance
     ExecutionTask task = new ExecutionTask(id, machine, event, eventRetries);
     return receive(task);
   }
@@ -376,7 +381,6 @@ public class StateMachineExecutor<S, SMC> {
    */
   protected static class StateExecutionAction<S, SMC> extends RecursiveAction {
     private final StateMachineExecutor<S, SMC> executor;
-    private final ExecutionPersistance<S, SMC> persistance;
     private final StateMachineDef<S, SMC> stateMachineDef;
     private final ForkJoinPool es;
 
@@ -384,7 +388,6 @@ public class StateMachineExecutor<S, SMC> {
 
     public StateExecutionAction(StateMachineExecutor<S, SMC> executor) {
       this.executor = executor;
-      this.persistance = executor.getPersistance();
       this.stateMachineDef = executor.stateMachineDef;
       this.es = executor.forkJoinPool;
     }

@@ -25,7 +25,7 @@ public class StateMachineSchema implements Schema<StateMachineTape> {
   }
 
   public StateMachineTape tapeFromSchemaTape(Schema.Tape tape) {
-    switch(String.class.cast(tape.get("tapeType"))) {
+    switch(String.class.cast(tape.get("tapeType").value)) {
       case "Start":
         return Start.fromSchemaTape(tape);
       case "Stage":

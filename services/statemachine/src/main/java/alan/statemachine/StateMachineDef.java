@@ -13,30 +13,6 @@ import alan.core.ExecutionId;
 
 
 /**
- *
- */
-@FunctionalInterface
-interface ContextSerializer<SC> {
-  public byte[] apply(SC context);
-}
-
-/**
- *
- */
-@FunctionalInterface
-interface ContextDeserializer<SC> {
-  public SC apply(byte[] binary);
-}
-
-/**
- *
- */
-@FunctionalInterface
-interface RuntimeExceptionHandler<S, SMC> {
-  public State.To<S, ?> handle(S state, Object event, StateMachineDef.Context<S, ?, SMC> context, Throwable exception);
-}
-
-/**
  * Sate Machine
  * @Immutable
  */
@@ -232,7 +208,7 @@ public abstract class StateMachineDef<S, SMC> {
    * [id description]
    * @param id [description]
    */
-  protected void name(String id) {
+  protected void name(String name) {
     this.name = name;
   }
 
@@ -568,7 +544,7 @@ public abstract class StateMachineDef<S, SMC> {
   /**
    * [RENAME]
    */
-  final static class Context<S, SC, SMC> {
+  public final static class Context<S, SC, SMC> {
     private SC stateContext;
     private SMC stateMachineContext;
     private final ExecutorService executorService;

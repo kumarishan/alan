@@ -16,12 +16,16 @@ import static alan.statemachine.State.Transition;
 import static alan.core.TapeCommand.*;
 import static alan.core.Tape.ContextLabel;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 /**
  * State Machine
  *
  */
 class StateMachine<S, SMC> implements Machine {
+  private static final Logger LOG = LoggerFactory.getLogger(StateMachine.class);
 
   private final ExecutionId id;
   private final StateMachineDef<S, SMC> stateMachineDef;
@@ -35,11 +39,11 @@ class StateMachine<S, SMC> implements Machine {
    * @param  executor        [description]
    * @return                 [description]
    */
-  public StateMachine(ExecutionId id, StateMachineDef<S, SMC> stateMachineDef, ExecutorService executor) {
+  public StateMachine(ExecutionId id, StateMachineDef<S, SMC> stateMachineDef, TapeLog<StateMachineTape> tapeLog, ExecutorService executor) {
     this.id = id;
     this.stateMachineDef = stateMachineDef;
     this.executor = executor;
-    this.tapeLog = new InMemoryTapeLog<>(new StateMachineSchema(), executor);
+    this.tapeLog = tapeLog;
   }
 
   /**
@@ -107,7 +111,7 @@ class StateMachine<S, SMC> implements Machine {
         } else {
           return runUpdate(tape, event, commands);
         }
-      })
+      }, executor)
       .exceptionally((exception) -> Response.RETRY_TASK);
   }
 
@@ -120,7 +124,7 @@ class StateMachine<S, SMC> implements Machine {
    */
   private CompletableFuture<Response> runUpdate(StateMachineTape tape, Object event, List<TapeCommand<?>> commands) {
     S currentState = stateMachineDef.stateNameFor(tape.getCurrentState());
-    return runUpdate(tape.step,
+    return runUpdate(tape.step + 1,
                      currentState,
                      stateMachineDef.deserializeStateContext(currentState, tape.getCurrentStateContext()),
                      stateMachineDef.deserializeStateMachineContext(tape.stateMachineContext),

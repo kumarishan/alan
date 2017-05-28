@@ -1,4 +1,4 @@
-package alan.statemachine;
+package alan;
 
 import java.util.Random;
 import java.util.concurrent.ForkJoinPool;
@@ -8,11 +8,14 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import alan.core.Alan;
+import alan.core.AlanConfig;
 import alan.core.ExecutionId;
+import alan.statemachine.StateMachineDef;
 
-import static alan.statemachine.Turnstile.State.*;
-import static alan.statemachine.Turnstile.State;
-import static alan.statemachine.Turnstile.*;
+import static alan.Turnstile.State.*;
+import static alan.Turnstile.State;
+import static alan.Turnstile.*;
 
 /**
  *

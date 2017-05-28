@@ -144,12 +144,12 @@ abstract class StateMachineTape extends Tape {
         row.id,
         row.step,
         row.stateMachineContext,
-        String.class.cast(row.get("currentState")),
-        byte[].class.cast(row.get("stateContext")),
-        ContextLabel.valueOf(String.class.cast(row.get("contextLabel"))),
-        String.class.cast(row.get("prevState")),
-        byte[].class.cast(row.get("prevStateContext")),
-        String.class.cast(row.get("triggerEvent"))
+        String.class.cast(row.get("currentState").value),
+        byte[].class.cast(row.get("currentStateContext").value),
+        ContextLabel.valueOf(String.class.cast(row.get("contextLabel").value)),
+        String.class.cast(row.get("prevState").value),
+        byte[].class.cast(row.get("prevStateContext").value),
+        String.class.cast(row.get("triggerEvent").value)
       );
     }
   }
@@ -196,10 +196,10 @@ abstract class StateMachineTape extends Tape {
         row.id,
         row.step,
         row.stateMachineContext,
-        String.class.cast(row.get("exception")),
-        String.class.cast(row.get("state")),
-        byte[].class.cast(row.get("stateContext")),
-        String.class.cast(row.get("triggerEvent"))
+        String.class.cast(row.get("exception").value),
+        String.class.cast(row.get("state").value),
+        byte[].class.cast(row.get("stateContext").value),
+        String.class.cast(row.get("triggerEvent").value)
       );
     }
   }
@@ -249,11 +249,11 @@ abstract class StateMachineTape extends Tape {
         row.id,
         row.step,
         row.stateMachineContext,
-        String.class.cast(row.get("state")),
-        byte[].class.cast(row.get("result")),
-        String.class.cast(row.get("fromState")),
-        byte[].class.cast(row.get("fromStateContext")),
-        String.class.cast(row.get("triggerEvent"))
+        String.class.cast(row.get("state").value),
+        byte[].class.cast(row.get("result").value),
+        String.class.cast(row.get("fromState").value),
+        byte[].class.cast(row.get("fromStateContext").value),
+        String.class.cast(row.get("triggerEvent").value)
       );
     }
   }
@@ -303,11 +303,11 @@ abstract class StateMachineTape extends Tape {
         row.id,
         row.step,
         row.stateMachineContext,
-        String.class.cast(row.get("state")),
-        byte[].class.cast(row.get("result")),
-        String.class.cast(row.get("fromState")),
-        byte[].class.cast(row.get("fromStateContext")),
-        String.class.cast(row.get("triggerEvent"))
+        String.class.cast(row.get("state").value),
+        byte[].class.cast(row.get("result").value),
+        String.class.cast(row.get("fromState").value),
+        byte[].class.cast(row.get("fromStateContext").value),
+        String.class.cast(row.get("triggerEvent").value)
       );
     }
   }

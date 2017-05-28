@@ -1,6 +1,7 @@
-package alan.statemachine;
+package alan.util;
 
 import java.lang.reflect.Field;
+
 
 public final class Unsafe {
   public final static sun.misc.Unsafe instance;
