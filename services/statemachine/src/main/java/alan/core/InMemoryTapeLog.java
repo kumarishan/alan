@@ -1,5 +1,7 @@
-package alan.store;
+package alan.core;
 
+import java.util.Collection;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -9,16 +11,22 @@ import java.util.HashMap;
 import java.util.Set;
 import java.util.Comparator;
 
-import alan.core.Store;
+import alan.core.TapeLog;
 import alan.core.Schema;
 import alan.core.ExecutionId;
 import alan.core.Tape;
 import alan.core.ExecutionLock;
 import alan.core.InMemoryExecutionLock;
 
+import static alan.core.TapeCommand.*;
 
-public class InMemoryStore extends Store {
-  private final Schema schema;
+
+/**
+ * 
+ */
+public class InMemoryTapeLog<T extends Tape> implements TapeLog<T> {
+  private final ExecutorService executor;
+  private final Schema<T> schema;
   private final ConcurrentMap<ExecutionId, ExecutionLock> locks; // [TODO] cache
   private final ConcurrentMap<ExecutionId, TreeMap<Integer, Schema.Tape>> tapes;
   private final ConcurrentMap<ExecutionId, Map<String, TreeMap<Integer, byte[]>>> stateContexts;
@@ -28,8 +36,45 @@ public class InMemoryStore extends Store {
     stateContexts = new ConcurrentHashMap<>();
   }
 
-  public InMemoryStore(Schema schema) {
+  public InMemoryTapeLog(Schema<T> schema, ExecutorService executor) {
     this.schema = schema;
+    this.executor = executor;
+  }
+
+  /**
+   * [execute description]
+   * @param  command [description]
+   * @return         [description]
+   */
+  @SuppressWarnings("unchecked")
+  public <R> CompletableFuture<R> execute(TapeCommand<R> command) {
+    if (command instanceof Push) {
+      Push push = (Push)command;
+      return (CompletableFuture<R>)push(push.id, (T)push.tape);
+    } else if (command instanceof Peek) {
+      Peek<T> peek = (Peek<T>)command;
+      return (CompletableFuture<R>)peek(peek.id);
+    } else if (command instanceof GetStateContext) {
+      GetStateContext getStateContext = (GetStateContext)command;
+      return (CompletableFuture<R>)getStateContext(getStateContext.id, getStateContext.state);
+    } else if (command instanceof AcquireLock) {
+      AcquireLock acquireLock = (AcquireLock)command;
+      return (CompletableFuture<R>)acquireLock(acquireLock.id);
+    } else if (command instanceof ReleaseLock) {
+      ReleaseLock releaseLock = (ReleaseLock)command;
+      return (CompletableFuture<R>)releaseLock(releaseLock.id);
+    }
+    return completedF(null);
+  }
+
+  public CompletableFuture<Boolean> execute(Collection<TapeCommand<?>> commands) {
+    CompletableFuture<Boolean> result = completedF(true);
+    for (TapeCommand<?> command : commands)
+      result = result.thenComposeAsync((success) -> {
+        if (success) return execute(command).thenApplyAsync((r) -> success);
+        else return completedF(false);
+      }, executor);
+    return result;
   }
 
   /**
@@ -38,7 +83,7 @@ public class InMemoryStore extends Store {
    * @param  tape [description]
    * @return      [description]
    */
-  public CompletableFuture<Boolean> push(ExecutionId id, Tape tape) {
+  private CompletableFuture<Boolean> push(ExecutionId id, T tape) {
     Schema.Tape row = schema.toSchemaTape(tape);
     TreeMap<Integer, Schema.Tape> log = tapes.get(id);
     if (log == null) {
@@ -71,16 +116,16 @@ public class InMemoryStore extends Store {
    * @param  id [description]
    * @return    [description]
    */
-  public CompletableFuture<Tape> peek(ExecutionId id) {
+  private CompletableFuture<T> peek(ExecutionId id) {
     TreeMap<Integer, Schema.Tape> log = tapes.get(id);
     if (log == null) return completedF(null);
-    else return completedF(schema.tapeFromSchemaTape(log.firstEntry().getValue()));
+    else return completedF((T)schema.tapeFromSchemaTape(log.firstEntry().getValue()));
   }
 
   /**
    *
    */
-  public CompletableFuture<byte[]> getStateContext(ExecutionId id, String state) {
+  private CompletableFuture<byte[]> getStateContext(ExecutionId id, String state) {
     Map<String, TreeMap<Integer, byte[]>> contexts = stateContexts.get(id);
     if (contexts == null) return completedF(null);
 
@@ -95,7 +140,7 @@ public class InMemoryStore extends Store {
    * @param  id [description]
    * @return    [description]
    */
-  public CompletableFuture<Boolean> acquireLock(ExecutionId id) {
+  private CompletableFuture<Boolean> acquireLock(ExecutionId id) {
     ExecutionLock lock = locks.get(id);
     if (lock == null) {
       lock = new InMemoryExecutionLock(id);
@@ -105,7 +150,7 @@ public class InMemoryStore extends Store {
     return lock.acquire();
   }
 
-  public CompletableFuture<Boolean> releaseLock(ExecutionId id) {
+  private CompletableFuture<Boolean> releaseLock(ExecutionId id) {
     ExecutionLock lock = locks.get(id);
     if (lock == null) return completedF(true);
     return lock.release();

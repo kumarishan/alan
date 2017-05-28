@@ -7,10 +7,10 @@ import java.util.HashMap;
 import static alan.core.Tape.Status;
 
 
-public interface Schema {
-  public Schema.Tape toSchemaTape(alan.core.Tape tape);
-  public alan.core.Tape tapeFromSchemaTape(Schema.Tape tape);
-  public Set<Schema.StateContext> getSchemaStateContext(alan.core.Tape tape);
+public interface Schema<T extends alan.core.Tape> {
+  public Schema.Tape toSchemaTape(T tape);
+  public T tapeFromSchemaTape(Schema.Tape tape);
+  public Set<Schema.StateContext> getSchemaStateContext(T tape);
 
 
   public static StateContext StateContext(int step, String state, byte[] context) {

@@ -4,14 +4,13 @@ import java.util.Set;
 import java.util.HashSet;
 
 import alan.core.Schema;
-import alan.core.Tape;
 
 import static alan.statemachine.StateMachineTape.*;
 
 
-public class StateMachineSchema implements Schema {
+public class StateMachineSchema implements Schema<StateMachineTape> {
 
-  public Schema.Tape toSchemaTape(alan.core.Tape tape) {
+  public Schema.Tape toSchemaTape(StateMachineTape tape) {
     if (tape instanceof Start) {
       return Start.toSchemaTape((Start)tape);
     } else if (tape instanceof Stage) {
@@ -25,7 +24,7 @@ public class StateMachineSchema implements Schema {
     } else return null; // throw error
   }
 
-  public alan.core.Tape tapeFromSchemaTape(Schema.Tape tape) {
+  public StateMachineTape tapeFromSchemaTape(Schema.Tape tape) {
     switch(String.class.cast(tape.get("tapeType"))) {
       case "Start":
         return Start.fromSchemaTape(tape);
@@ -42,7 +41,7 @@ public class StateMachineSchema implements Schema {
     }
   }
 
-  public Set<Schema.StateContext> getSchemaStateContext(alan.core.Tape tape) {
+  public Set<Schema.StateContext> getSchemaStateContext(StateMachineTape tape) {
     Set<Schema.StateContext> contexts = new HashSet<>();
     if (tape instanceof Start) {
       Start start = (Start)tape;

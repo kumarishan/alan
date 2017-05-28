@@ -14,8 +14,8 @@ public abstract class TapeCommand<R> {
     return new Push(id, tape);
   }
 
-  public static Peek Peek(ExecutionId id) {
-    return new Peek(id);
+  public static <T extends Tape> Peek<T> Peek(ExecutionId id, Class<T> type) {
+    return new Peek<>(id, type);
   }
 
   public static AcquireLock AcquireLock(ExecutionId id) {
@@ -26,13 +26,9 @@ public abstract class TapeCommand<R> {
     return new GetStateContext(id, state);
   }
 
-
-  public static class Fork extends TapeCommand<Boolean> {
-    public Fork(ExecutionId id) {
-      super(id);
-    }
-  }
-
+  /**
+   * 
+   */
   public static class Push extends TapeCommand<Boolean> {
     public final Tape tape;
     public Push(ExecutionId id, Tape tape) {
@@ -44,18 +40,11 @@ public abstract class TapeCommand<R> {
   /**
    *
    */
-  public static class Peek<T> extends TapeCommand<T> {
-    public Peek(ExecutionId id) {
+  public static class Peek<T extends Tape> extends TapeCommand<T> {
+    public final Class<T> type;
+    public Peek(ExecutionId id, Class<T> type) {
       super(id);
-    }
-  }
-
-  /**
-   *
-   */
-  public static class Pop extends TapeCommand<Tape> {
-    public Pop(ExecutionId id) {
-      super(id);
+      this.type = type;
     }
   }
 

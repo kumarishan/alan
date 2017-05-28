@@ -9,27 +9,13 @@ import alan.core.ExecutionId;
 import alan.core.Machine;
 import alan.core.TapeLog;
 import alan.core.TapeCommand;
-import alan.core.Store;
-import alan.store.InMemoryStore;
+import alan.core.InMemoryTapeLog;
 
 import static alan.core.Machine.Response;
 import static alan.statemachine.State.Transition;
 import static alan.core.TapeCommand.*;
-import static alan.statemachine.StateMachinePeek.StateMachinePeek;
 import static alan.core.Tape.ContextLabel;
 
-/**
- *
- */
-class StateMachinePeek extends Peek<StateMachineTape> {
-  public StateMachinePeek(ExecutionId id) {
-    super(id);
-  }
-
-  public static StateMachinePeek StateMachinePeek(ExecutionId id) {
-    return new StateMachinePeek(id);
-  }
-}
 
 /**
  * State Machine
@@ -40,7 +26,7 @@ class StateMachine<S, SMC> implements Machine {
   private final ExecutionId id;
   private final StateMachineDef<S, SMC> stateMachineDef;
   private final ExecutorService executor;
-  private final StateMachineTapeLog tapeLog;
+  private final TapeLog<StateMachineTape> tapeLog;
 
   /**
    * [StateMachine description]
@@ -53,7 +39,7 @@ class StateMachine<S, SMC> implements Machine {
     this.id = id;
     this.stateMachineDef = stateMachineDef;
     this.executor = executor;
-    this.tapeLog = new StateMachineTapeLog(new InMemoryStore(new StateMachineSchema()), executor);
+    this.tapeLog = new InMemoryTapeLog<>(new StateMachineSchema(), executor);
   }
 
   /**
@@ -103,7 +89,7 @@ class StateMachine<S, SMC> implements Machine {
    * @return       [description]
    */
   private <E> CompletableFuture<Response> getRunUpdate(E event) {
-    return tapeLog.execute(StateMachinePeek(id))
+    return tapeLog.execute(Peek(id, StateMachineTape.class))
       .thenComposeAsync((tape) -> {
         if (tape != null && tape.isCompleted()) return completedF(Response.FAILED_ALREADY_COMPLETE);
 
