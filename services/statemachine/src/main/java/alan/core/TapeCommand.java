@@ -1,7 +1,7 @@
 package alan.core;
 
 public abstract class TapeCommand<R> {
-  ExecutionId id;
+  public final ExecutionId id;
   protected TapeCommand(ExecutionId id) {
     this.id = id;
   }
@@ -10,8 +10,8 @@ public abstract class TapeCommand<R> {
     return new ReleaseLock(id);
   }
 
-  public static DiffPush DiffPush(ExecutionId id, Tape tape) {
-    return new DiffPush(id, tape);
+  public static Push Push(ExecutionId id, Tape tape) {
+    return new Push(id, tape);
   }
 
   public static Peek Peek(ExecutionId id) {
@@ -27,15 +27,15 @@ public abstract class TapeCommand<R> {
   }
 
 
-  static class Fork extends TapeCommand<Boolean> {
+  public static class Fork extends TapeCommand<Boolean> {
     public Fork(ExecutionId id) {
       super(id);
     }
   }
 
-  static class DiffPush extends TapeCommand<Boolean> {
-    Tape tape;
-    public DiffPush(ExecutionId id, Tape tape) {
+  public static class Push extends TapeCommand<Boolean> {
+    public final Tape tape;
+    public Push(ExecutionId id, Tape tape) {
       super(id);
       this.tape = tape;
     }
@@ -59,12 +59,11 @@ public abstract class TapeCommand<R> {
     }
   }
 
-
   /**
    *
    */
   public static class GetStateContext extends TapeCommand<byte[]> {
-    String state;
+    public final String state;
     public GetStateContext(ExecutionId id, String state) {
       super(id);
       this.state = state;
@@ -80,6 +79,9 @@ public abstract class TapeCommand<R> {
     }
   }
 
+  /**
+   *
+   */
   public static class ReleaseLock extends TapeCommand<Boolean> {
     public ReleaseLock(ExecutionId id) {
       super(id);
