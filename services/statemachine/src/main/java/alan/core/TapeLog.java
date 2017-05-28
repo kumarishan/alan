@@ -7,12 +7,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * 
  */
-public class TapeLog {
-  public <R> CompletableFuture<R> execute(TapeCommand<R> command) {
-    return CompletableFuture.completedFuture(null);
-  }
-
-  public CompletableFuture<Boolean> execute(Collection<TapeCommand<?>> commands) {
-    return CompletableFuture.completedFuture(true);
-  }
+public interface TapeLog<T extends Tape> {
+  public <R> CompletableFuture<R> execute(TapeCommand<R> command);
+  public CompletableFuture<Boolean> execute(Collection<TapeCommand<?>> commands);
 }

@@ -9,13 +9,14 @@ import alan.core.ExecutionId;
 import alan.core.Machine;
 import alan.core.TapeLog;
 import alan.core.TapeCommand;
+import alan.core.Store;
+import alan.store.InMemoryStore;
 
 import static alan.core.Machine.Response;
 import static alan.statemachine.State.Transition;
 import static alan.core.TapeCommand.*;
 import static alan.statemachine.StateMachinePeek.StateMachinePeek;
 import static alan.core.Tape.ContextLabel;
-
 
 /**
  *
@@ -39,7 +40,7 @@ class StateMachine<S, SMC> implements Machine {
   private final ExecutionId id;
   private final StateMachineDef<S, SMC> stateMachineDef;
   private final ExecutorService executor;
-  private final TapeLog tapeLog = new TapeLog(); // TODO
+  private final StateMachineTapeLog tapeLog;
 
   /**
    * [StateMachine description]
@@ -52,6 +53,7 @@ class StateMachine<S, SMC> implements Machine {
     this.id = id;
     this.stateMachineDef = stateMachineDef;
     this.executor = executor;
+    this.tapeLog = new StateMachineTapeLog(new InMemoryStore(new StateMachineSchema()), executor);
   }
 
   /**
@@ -67,7 +69,7 @@ class StateMachine<S, SMC> implements Machine {
    * @return [description]
    */
   public String getName() {
-    return stateMachineDef.getId();
+    return stateMachineDef.getName();
   }
 
   /**
@@ -114,7 +116,7 @@ class StateMachine<S, SMC> implements Machine {
                                         stateMachineDef.serializeStateMachineContext(stateMachineContext),
                                         stateMachineDef.nameStrFor(state),
                                         stateMachineDef.serializeStateContext(stateContext));
-          commands.add(DiffPush(id, tape));
+          commands.add(Push(id, tape));
           return runUpdate(1, state, stateContext, stateMachineContext, event, commands);
         } else {
           return runUpdate(tape, event, commands);
@@ -195,7 +197,7 @@ class StateMachine<S, SMC> implements Machine {
       StateMachineTape tape = StateMachineTape.Stop(id, step, stateMachineContextBinary,
                                                     stop.exception.toString(),
                                                     prevStateStr, prevStateContextBinary, prevTriggerEventType);
-      commands.add(DiffPush(id, tape));
+      commands.add(Push(id, tape));
       return tapeLog.execute(commands)
                     .thenApplyAsync((success) -> {
                       if (success) return Response.SUCCESS;
@@ -207,7 +209,7 @@ class StateMachine<S, SMC> implements Machine {
           StateMachineTape tape = StateMachineTape.Success(id, step, stateMachineContextBinary,
                                                            stateMachineDef.nameStrFor(to.state), stateMachineDef.serializeSinkStateResult(result),
                                                            prevStateStr, prevStateContextBinary, prevTriggerEventType);
-          commands.add(DiffPush(id, tape));
+          commands.add(Push(id, tape));
           return tapeLog.execute(commands)
                         .thenApplyAsync((success) -> {
                           if (success) return Response.SUCCESS;
@@ -220,7 +222,7 @@ class StateMachine<S, SMC> implements Machine {
           StateMachineTape tape = StateMachineTape.Failure(id, step, stateMachineContextBinary,
                                                            stateMachineDef.nameStrFor(to.state), stateMachineDef.serializeSinkStateResult(result),
                                                            prevStateStr, prevStateContextBinary, prevTriggerEventType);
-          commands.add(DiffPush(id, tape));
+          commands.add(Push(id, tape));
           return tapeLog.execute(commands)
                         .thenApplyAsync((success) -> {
                           if (success) return Response.SUCCESS;
@@ -234,7 +236,7 @@ class StateMachine<S, SMC> implements Machine {
         StateMachineTape tape = StateMachineTape.Stage(id, step, stateMachineContextBinary,
                                                       toStateStr, contextOverride, ContextLabel.OVERRIDE,
                                                       prevStateStr, prevStateContextBinary, prevTriggerEventType);
-        commands.add(DiffPush(id, tape));
+        commands.add(Push(id, tape));
         return tapeLog.execute(commands)
                       .thenApplyAsync((success) -> {
                         if (success) return Response.SUCCESS;
@@ -252,7 +254,7 @@ class StateMachine<S, SMC> implements Machine {
                         StateMachineTape tape = StateMachineTape.Stage(id, step, stateMachineContextBinary,
                                                                        toStateStr, stateContext, label,
                                                                        prevStateStr, prevStateContextBinary, prevTriggerEventType);
-                        commands.add(DiffPush(id, tape));
+                        commands.add(Push(id, tape));
                         return tapeLog.execute(commands)
                                       .thenApplyAsync((success) -> {
                                         if (success) return Response.SUCCESS;
