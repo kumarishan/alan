@@ -141,7 +141,7 @@ class StateMachine<S, SMC> implements Machine {
    * @return                     [description]
    */
   private CompletableFuture<Response> runUpdate(int step, S currentState, Object stateContext, SMC stateMachineContext, Object event, List<TapeCommand<?>> commands) {
-    StateMachineDef.Context<S, Object, SMC> transitionContext = new StateMachineDef.Context<>(currentState, stateContext, stateMachineContext, stateMachineDef);
+    StateMachineDef.ActionContext<S, Object, SMC> transitionContext = new StateMachineDef.ActionContext<>(currentState, stateContext, stateMachineContext, stateMachineDef);
     Transition<S, Object, Object, SMC> transition = stateMachineDef.getTransition(event, transitionContext); //////
     if (transition != null) {
       if (!transition.isAsync()) {

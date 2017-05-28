@@ -261,7 +261,7 @@ class State<S, SC> {
      * @param  context [description]
      * @return         [description]
      */
-    public boolean check(E event, StateMachineDef.Context<S, SC, SMC> context) {
+    public boolean check(E event, StateMachineDef.ActionContext<S, SC, SMC> context) {
       return (this.predicate == null ? true : this.predicate.apply(event, context));
     }
   }
@@ -271,7 +271,7 @@ class State<S, SC> {
    */
   @FunctionalInterface
   public static interface Predicate<S, E, SC, SMC> {
-    public boolean apply(E event, StateMachineDef.Context<S, SC, SMC> context);
+    public boolean apply(E event, StateMachineDef.ActionContext<S, SC, SMC> context);
   }
 
   /**
@@ -279,7 +279,7 @@ class State<S, SC> {
    */
   @FunctionalInterface
   public static interface Action<S, E, SC, SMC> {
-    public To<S, ?> apply(E event, StateMachineDef.Context<S, SC, SMC> context) throws Throwable;
+    public To<S, ?> apply(E event, StateMachineDef.ActionContext<S, SC, SMC> context) throws Throwable;
   }
 
   /**
@@ -287,7 +287,7 @@ class State<S, SC> {
    */
   @FunctionalInterface
   public static interface AsyncAction<S, E, SC, SMC> {
-    public CompletableFuture<To<S, ?>> apply(E event, StateMachineDef.Context<S, SC, SMC> context);
+    public CompletableFuture<To<S, ?>> apply(E event, StateMachineDef.ActionContext<S, SC, SMC> context);
   }
 
   /**

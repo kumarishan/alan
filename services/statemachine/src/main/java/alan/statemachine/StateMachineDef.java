@@ -49,7 +49,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
     // defaults
     // default serde using jackson...
     executorServiceFactory = () -> ForkJoinPool.commonPool();
-    runtimeExceptionHandler = (S state, Object event, StateMachineDef.Context<S, ?, SMC> context, Throwable exception) -> stop(exception);
+    runtimeExceptionHandler = (S state, Object event, StateMachineDef.ActionContext<S, ?, SMC> context, Throwable exception) -> stop(exception);
   }
 
   /**
@@ -173,7 +173,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @param  context   [description]
    * @return           [description]
    */
-  public <E, SC> State.Transition<S, E, SC, SMC> getTransition(E event, StateMachineDef.Context<S, SC, SMC> context) {
+  public <E, SC> State.Transition<S, E, SC, SMC> getTransition(E event, StateMachineDef.ActionContext<S, SC, SMC> context) {
     @SuppressWarnings("unchecked")
     State<S, SC> state = (State<S, SC>) states.get(context.state);
     @SuppressWarnings("unchecked")
@@ -564,14 +564,14 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
   /**
    * [RENAME]
    */
-  public final static class Context<S, SC, SMC> {
+  public final static class ActionContext<S, SC, SMC> {
     private SC stateContext;
     private SMC stateMachineContext;
     private final ExecutorService executorService;
     private final S state;
     private final StateMachineDef<S, SMC> stateMachineDef;
 
-    Context(S state, SC stateContext, SMC stateMachineContext, ExecutorService executorService, StateMachineDef<S, SMC> stateMachineDef) {
+    ActionContext(S state, SC stateContext, SMC stateMachineContext, ExecutorService executorService, StateMachineDef<S, SMC> stateMachineDef) {
       this.state = state;
       this.stateContext = stateContext;
       this.stateMachineContext = stateMachineContext;
@@ -579,7 +579,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
       this.stateMachineDef = stateMachineDef;
     }
 
-    Context(S state, SC stateContext, SMC stateMachineContext, StateMachineDef<S, SMC> stateMachineDef) {
+    ActionContext(S state, SC stateContext, SMC stateMachineContext, StateMachineDef<S, SMC> stateMachineDef) {
       this(state, stateContext, stateMachineContext, null, stateMachineDef);
     }
 
@@ -647,8 +647,8 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
      * @param  service [description]
      * @return         [description]
      */
-    public Context<S, SC, SMC> copy(ExecutorService service) {
-      return new Context<>(state, stateContext, stateMachineContext, service, stateMachineDef);
+    public ActionContext<S, SC, SMC> copy(ExecutorService service) {
+      return new ActionContext<>(state, stateContext, stateMachineContext, service, stateMachineDef);
     }
   }
 

@@ -34,10 +34,14 @@ State machine
 - ~~Merge to develop~~
 - ~~change the project name to alan~~
 - Code refactoring (class designs)
+  - ~~Interfaces~~
+  - ~~Introduce Tape based persistance~~
   - Logging
+  - TapeLogFactory
   - StateMachienDef arrange functions
-  - Introduce Tape based persistance
   - Retry/Blocking queue
+  - Contextless state
+  - jackson default serializer
 - Persistance with Cassandra
 - Lock using Apache Zookeeper
 - Test run (db store)
