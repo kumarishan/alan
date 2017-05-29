@@ -55,7 +55,7 @@ public final class StateMachineActionContext<S, SC, SMC> {
    */
   @SuppressWarnings("unchecked")
   public SC resetStateContext() {
-    stateContext = (SC)stateMachineDef.getStateContextFactory(state).get();
+    stateContext = (SC)stateMachineDef.createStateContext(state);
     return stateContext;
   }
 
@@ -64,7 +64,7 @@ public final class StateMachineActionContext<S, SC, SMC> {
    * @return [description]
    */
   public SMC resetStateMachineContext() {
-    stateMachineContext = stateMachineDef.getStateMachineContextFactory().get();
+    stateMachineContext = stateMachineDef.createStateMachineContext();
     return stateMachineContext;
   }
 

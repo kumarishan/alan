@@ -102,7 +102,7 @@ class StateMachine<S, SMC> implements Machine {
         if (tape == null) {
           S state = stateMachineDef.getStartState();
           Object stateContext = stateMachineDef.getStartStateContext();
-          SMC stateMachineContext = stateMachineDef.getStateMachineContextFactory().get();
+          SMC stateMachineContext = stateMachineDef.createStateMachineContext();
           tape = StateMachineTape.Start(id, 0,
                                         stateMachineDef.serializeStateMachineContext(stateMachineContext),
                                         stateMachineDef.nameFor(state),
@@ -113,7 +113,10 @@ class StateMachine<S, SMC> implements Machine {
           return runUpdate(tape, event, commands);
         }
       }, executor)
-      .exceptionally((exception) -> Response.RETRY_TASK);
+      .exceptionally((exception) -> {
+        exception.printStackTrace();
+        return Response.RETRY_TASK;
+      });
   }
 
   /**
@@ -239,7 +242,7 @@ class StateMachine<S, SMC> implements Machine {
                         ContextLabel label = ContextLabel.CARRY;
                         if (stateContext == null) {
                           stateContext = stateMachineDef.serializeStateContext(
-                            stateMachineDef.getStateContextFactory(to.state).get());
+                            stateMachineDef.createStateContext(to.state));
                           label = ContextLabel.NEW;
                         }
                         StateMachineTape tape = StateMachineTape.Stage(id, step, stateMachineContextBinary,

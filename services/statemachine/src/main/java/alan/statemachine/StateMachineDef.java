@@ -34,6 +34,10 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
     public State(S state, Class<SC> contextType, Supplier<SC> contextFactory) {
       super(state, contextType, contextFactory);
     }
+
+    public State(S state) {
+      super(state);
+    }
   }
 
   private String name;
@@ -193,16 +197,16 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
   /**
    *
    */
-  Supplier<?> getStateContextFactory(S state) {
-    return states.get(state).getContextFactory();
+  Object createStateContext(S state) {
+    return states.get(state).createContext();
   }
 
   /**
    * [getStateMachineContextFactory description]
    * @return [description]
    */
-  Supplier<SMC> getStateMachineContextFactory() {
-    return stateMachineContextFactory;
+  SMC createStateMachineContext() {
+    return stateMachineContextFactory.get();
   }
 
   /**
@@ -339,6 +343,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    */
   @SuppressWarnings("unchecked")
   byte[] serializeStateContext(Object context) {
+    if (context == null) return null;
     return kryoSerialize(context);
   }
 
@@ -349,6 +354,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @return               [description]
    */
   Object deserializeStateContext(S state, byte[] binary) {
+    if (binary == null) return null;
     @SuppressWarnings("unchecked")
     StateDef<S, Object, SMC> stateDef = (StateDef<S, Object, SMC>)states.get(state);
     if (stateDef == null)
@@ -364,6 +370,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    */
   @SuppressWarnings("unchecked")
   byte[] serializeSinkStateResult(Object result) {
+    if (result == null) return null;
     return kryoSerialize(result);
   }
 
@@ -374,6 +381,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @return           [description]
    */
   Object deserializeSinkStateResult(S sinkState, byte[] binary) {
+    if (binary == null) return null;
     @SuppressWarnings("unchecked")
     SinkStateDef<S, SMC, Object> sinkStateDef = (SinkStateDef<S, SMC, Object>)sinkStates.get(sinkState);
     if (sinkStateDef == null)
@@ -421,7 +429,11 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
     if (sinkStates.containsKey(state))
       throw new IllegalArgumentException("State " + state + " is already defined as a sink state");
 
-    State<SC> stateDef = new State<SC>(state, contextType, contextFactory);
+    State<SC> stateDef;
+    if (contextType == null)
+      stateDef = new State<SC>(state);
+    else
+      stateDef = new State<SC>(state, contextType, contextFactory);
     states.put(state, stateDef);
     addToNameToState(state);
     return stateDef;
@@ -432,7 +444,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @param  state [description]
    * @return       [description]
    */
-  protected StateDef<S, Object, SMC> defineState(S state) {
+  protected State<Object> defineState(S state) {
     return defineState(state, null, null);
   }
 

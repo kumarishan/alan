@@ -32,9 +32,21 @@ class StateDef<S, SC, SMC> {
    * @return                [description]
    */
   public StateDef(S state, Class<SC> contextType, Supplier<SC> contextFactory) {
+    assert(state != null && contextType != null && contextFactory != null);
     this.state = state;
     this.contextType = contextType;
     this.contextFactory = contextFactory;
+  }
+
+  /**
+   * [StateDef description]
+   * @param  state [description]
+   * @return       [description]
+   */
+  public StateDef(S state) {
+    this.state = state;
+    this.contextType = null;
+    this.contextFactory = null;
   }
 
   /**
@@ -63,14 +75,6 @@ class StateDef<S, SC, SMC> {
   }
 
   /**
-   * [getContextFactory description]
-   * @return [description]
-   */
-  Supplier<SC> getContextFactory() {
-    return contextFactory;
-  }
-
-  /**
    * [validateContextType description]
    * @param  context [description]
    * @return         [description]
@@ -86,7 +90,7 @@ class StateDef<S, SC, SMC> {
    */
   SC createContext() {
     if (contextFactory == null) return null;
-    return contextFactory.get();
+    else return contextFactory.get();
   }
 
   /**
