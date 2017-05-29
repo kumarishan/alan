@@ -144,16 +144,18 @@ class StateMachine<S, SMC> implements Machine {
    * @return                     [description]
    */
   private CompletableFuture<Response> runUpdate(int step, S currentState, Object stateContext, SMC stateMachineContext, Object event, List<TapeCommand<?>> commands) {
-    StateMachineActionContext<S, Object, SMC> transitionContext = new StateMachineActionContext<>(currentState, stateContext, stateMachineContext, stateMachineDef);
+    StateActionContext<S, Object, SMC> transitionContext = new StateActionContext<>(currentState, stateContext, stateMachineContext, stateMachineDef);
     Transition<S, Object, Object, SMC> transition = stateMachineDef.getTransition(event, transitionContext); //////
     if (transition != null) {
       if (!transition.isAsync()) {
-        Transition.To<S, ?> to;
+        Transition.To to;
         try {
           to = transition.getAction().apply(event, transitionContext.copy(executor));
-          if (!(to instanceof Transition.Stop) && to.contextOverride != null
-              && stateMachineDef.validateContextType(to.state, to.contextOverride)) {
-            return completedF(Response.FAILED_INVALID_TRANSITION); // capture this invalid transition... ???
+          if (to instanceof Transition.GoTo) {
+            @SuppressWarnings("unchecked")
+            Transition.GoTo<S, ?> goTo = (Transition.GoTo<S, ?>)to;
+            if (goTo.contextOverride != null && stateMachineDef.validateContextType(goTo.state, goTo.contextOverride))
+              return completedF(Response.FAILED_INVALID_TRANSITION); // capture this invalid transition... ???
           }
         } catch (Throwable ex) {
           to = stateMachineDef.getRuntimeExceptionHandler().handle(currentState, event, transitionContext, ex); // capture this exception handling... ???
@@ -179,7 +181,7 @@ class StateMachine<S, SMC> implements Machine {
    * @param  context   [description]
    * @return           [description]
    */
-  private CompletableFuture<Response> update(int step, SMC stateMachineContext, Transition.To<S, ?> to, S prevState, Object prevStateContext, Object event, List<TapeCommand<?>> commands) {
+  private CompletableFuture<Response> update(int step, SMC stateMachineContext, Transition.To to, S prevState, Object prevStateContext, Object event, List<TapeCommand<?>> commands) {
     byte[] stateMachineContextBinary = stateMachineDef.serializeStateMachineContext(stateMachineContext);
     String prevStateStr = stateMachineDef.nameFor(prevState);
     byte[] prevStateContextBinary = stateMachineDef.serializeStateContext(prevStateContext);
@@ -188,7 +190,7 @@ class StateMachine<S, SMC> implements Machine {
 
     if (to instanceof Transition.Stop) {
       @SuppressWarnings("unchecked")
-      Transition.Stop<S> stop = (Transition.Stop<S>) to;
+      Transition.Stop stop = (Transition.Stop)to;
       StateMachineTape tape = StateMachineTape.Stop(id, step, stateMachineContextBinary,
                                                     stop.exception.toString(),
                                                     prevStateStr, prevStateContextBinary, prevTriggerEventType, prevTriggerEventBinary);
@@ -198,25 +200,84 @@ class StateMachine<S, SMC> implements Machine {
                       if (success) return Response.SUCCESS;
                       else return Response.FAILED_TO_PERSIST;
                     }, executor);
-    } else if (stateMachineDef.isSuccessState(to.state)) {
-      return runSuccessState(to.state, stateMachineContext, event.getClass())
-        .thenComposeAsync((result) -> {
-          StateMachineTape tape = StateMachineTape.Success(id, step, stateMachineContextBinary,
-                                                           stateMachineDef.nameFor(to.state), stateMachineDef.serializeSinkStateResult(result),
-                                                           prevStateStr, prevStateContextBinary, prevTriggerEventType, prevTriggerEventBinary);
+    } else if (to instanceof Transition.GoTo) {
+      @SuppressWarnings("unchecked")
+      Transition.GoTo<S, Object> goTo = (Transition.GoTo<S, Object>)to;
+      if (stateMachineDef.isSuccessState(goTo.state)) {
+        return runSuccessState(goTo.state, stateMachineContext, event.getClass())
+          .thenComposeAsync((result) -> {
+            StateMachineTape tape = StateMachineTape.Success(id, step, stateMachineContextBinary,
+                                                             stateMachineDef.nameFor(goTo.state),
+                                                             stateMachineDef.serializeSinkStateResult(result),
+                                                             prevStateStr, prevStateContextBinary,
+                                                             prevTriggerEventType, prevTriggerEventBinary);
+            commands.add(Push(id, tape));
+            return tapeLog.execute(commands)
+                          .thenApplyAsync((success) -> {
+                            if (success) return Response.SUCCESS;
+                            else return Response.FAILED_TO_PERSIST;
+                          }, executor);
+          }, executor);
+      } else if (stateMachineDef.isFailureState(goTo.state)) {
+        return runFailureState(goTo.state, null, stateMachineContext, event.getClass())
+          .thenComposeAsync((result) -> {
+            StateMachineTape tape = StateMachineTape.Failure(id, step, stateMachineContextBinary,
+                                                             stateMachineDef.nameFor(goTo.state),
+                                                             stateMachineDef.serializeSinkStateResult(result),
+                                                             prevStateStr, prevStateContextBinary,
+                                                             prevTriggerEventType, prevTriggerEventBinary);
+            commands.add(Push(id, tape));
+            return tapeLog.execute(commands)
+                          .thenApplyAsync((success) -> {
+                            if (success) return Response.SUCCESS;
+                            else return Response.FAILED_TO_PERSIST;
+                          }, executor);
+          }, executor);
+      } else {
+        String toStateStr = stateMachineDef.nameFor(goTo.state);
+        if (goTo.contextOverride != null) {
+          byte[] contextOverride = stateMachineDef.serializeStateContext(goTo.contextOverride);
+          StateMachineTape tape = StateMachineTape.Stage(id, step, stateMachineContextBinary,
+                                                        toStateStr, contextOverride, ContextLabel.OVERRIDE,
+                                                        prevStateStr, prevStateContextBinary, prevTriggerEventType, prevTriggerEventBinary);
           commands.add(Push(id, tape));
           return tapeLog.execute(commands)
                         .thenApplyAsync((success) -> {
                           if (success) return Response.SUCCESS;
-                          else return Response.FAILED_TO_PERSIST;
+                          else return Response.FAILED_TO_PERSIST_NEXT_STAGE;
                         }, executor);
-        }, executor);
-    } else if (stateMachineDef.isFailureState(to.state)) {
-      return runFailureState(to.state, stateMachineContext, event.getClass())
+        } else {
+          return tapeLog.execute(GetStateContext(id, toStateStr))
+                        .thenComposeAsync((stateContext) -> {
+                          ContextLabel label = ContextLabel.CARRY;
+                          if (stateContext == null) {
+                            stateContext = stateMachineDef.serializeStateContext(
+                              stateMachineDef.createStateContext(goTo.state));
+                            label = ContextLabel.NEW;
+                          }
+                          StateMachineTape tape = StateMachineTape.Stage(id, step, stateMachineContextBinary,
+                                                                         toStateStr, stateContext, label,
+                                                                         prevStateStr, prevStateContextBinary,
+                                                                         prevTriggerEventType, prevTriggerEventBinary);
+                          commands.add(Push(id, tape));
+                          return tapeLog.execute(commands)
+                                        .thenApplyAsync((success) -> {
+                                          if (success) return Response.SUCCESS;
+                                          else return Response.FAILED_TO_PERSIST_NEXT_STAGE;
+                                        }, executor);
+                        }, executor);
+        }
+      }
+    } else {
+      @SuppressWarnings("unchecked")
+      Transition.FailTo<S> failTo = (Transition.FailTo<S>)to;
+      return runFailureState(failTo.state, failTo.exception, stateMachineContext, event.getClass())
         .thenComposeAsync((result) -> {
           StateMachineTape tape = StateMachineTape.Failure(id, step, stateMachineContextBinary,
-                                                           stateMachineDef.nameFor(to.state), stateMachineDef.serializeSinkStateResult(result),
-                                                           prevStateStr, prevStateContextBinary, prevTriggerEventType, prevTriggerEventBinary);
+                                                           stateMachineDef.nameFor(failTo.state),
+                                                           stateMachineDef.serializeSinkStateResult(result),
+                                                           prevStateStr, prevStateContextBinary,
+                                                           prevTriggerEventType, prevTriggerEventBinary);
           commands.add(Push(id, tape));
           return tapeLog.execute(commands)
                         .thenApplyAsync((success) -> {
@@ -224,39 +285,6 @@ class StateMachine<S, SMC> implements Machine {
                           else return Response.FAILED_TO_PERSIST;
                         }, executor);
         }, executor);
-    } else {
-      String toStateStr = stateMachineDef.nameFor(to.state);
-      if (to.contextOverride != null) {
-        byte[] contextOverride = stateMachineDef.serializeStateContext(to.contextOverride);
-        StateMachineTape tape = StateMachineTape.Stage(id, step, stateMachineContextBinary,
-                                                      toStateStr, contextOverride, ContextLabel.OVERRIDE,
-                                                      prevStateStr, prevStateContextBinary, prevTriggerEventType, prevTriggerEventBinary);
-        commands.add(Push(id, tape));
-        return tapeLog.execute(commands)
-                      .thenApplyAsync((success) -> {
-                        if (success) return Response.SUCCESS;
-                        else return Response.FAILED_TO_PERSIST_NEXT_STAGE;
-                      }, executor);
-      } else {
-        return tapeLog.execute(GetStateContext(id, toStateStr))
-                      .thenComposeAsync((stateContext) -> {
-                        ContextLabel label = ContextLabel.CARRY;
-                        if (stateContext == null) {
-                          stateContext = stateMachineDef.serializeStateContext(
-                            stateMachineDef.createStateContext(to.state));
-                          label = ContextLabel.NEW;
-                        }
-                        StateMachineTape tape = StateMachineTape.Stage(id, step, stateMachineContextBinary,
-                                                                       toStateStr, stateContext, label,
-                                                                       prevStateStr, prevStateContextBinary, prevTriggerEventType, prevTriggerEventBinary);
-                        commands.add(Push(id, tape));
-                        return tapeLog.execute(commands)
-                                      .thenApplyAsync((success) -> {
-                                        if (success) return Response.SUCCESS;
-                                        else return Response.FAILED_TO_PERSIST_NEXT_STAGE;
-                                      }, executor);
-                      }, executor);
-      }
     }
   }
 
@@ -268,12 +296,13 @@ class StateMachine<S, SMC> implements Machine {
    * @return                     [description]
    */
   private CompletableFuture<Object> runSuccessState(S state, SMC stateMachineContext, Class<?> eventType) {
-    SinkStateDef<S, SMC, Object> sinkState = stateMachineDef.getSinkState(state);
-    if (!sinkState.isActionAsync()) {
-      Object result = sinkState.getAction().apply(stateMachineContext); // i think provide event type to reach this success state....
+    @SuppressWarnings("unchecked")
+    SuccessStateDef<S, SMC, Object> successStateDef = (SuccessStateDef<S, SMC, Object>)stateMachineDef.getSinkState(state);
+    if (!successStateDef.isActionAsync()) {
+      Object result = successStateDef.getAction().apply(stateMachineContext); // i think provide event type to reach this success state....
       return completedF(result);
     } else {
-      return sinkState.getAsyncAction().apply(stateMachineContext, executor);
+      return successStateDef.getAsyncAction().apply(stateMachineContext, executor);
     }
   }
 
@@ -284,13 +313,14 @@ class StateMachine<S, SMC> implements Machine {
    * @param  eventType [description]
    * @return           [description]
    */
-  private CompletableFuture<Object> runFailureState(S state, SMC stateMachineContext, Class<?> eventType) {
-    SinkStateDef<S, SMC, Object> sinkState = stateMachineDef.getSinkState(state);
-    if (!sinkState.isActionAsync()) {
-      Object result = sinkState.getAction().apply(stateMachineContext); // i think provide event type to reach this success state....
+  private CompletableFuture<Object> runFailureState(S state, Throwable exception, SMC stateMachineContext, Class<?> eventType) {
+    @SuppressWarnings("unchecked")
+    FailureStateDef<S, SMC, Object> failureStateDef = (FailureStateDef<S, SMC, Object>)stateMachineDef.getSinkState(state);
+    if (!failureStateDef.isActionAsync()) {
+      Object result = failureStateDef.getAction().apply(stateMachineContext, exception); // i think provide event type to reach this success state....
       return completedF(result);
     } else {
-      return sinkState.getAsyncAction().apply(stateMachineContext, executor);
+      return failureStateDef.getAsyncAction().apply(stateMachineContext, exception, executor);
     }
   }
 

@@ -133,6 +133,16 @@ class StateDef<S, SC, SMC> {
   }
 
   /**
+   * [onEvent description]
+   * @param  eventType [description]
+   * @param  predicate [description]
+   * @return           [description]
+   */
+  public <E> Transition.Buildr<S, SC, SMC, E> onEvent(Class<E> eventType, Transition.Predicate<S, E, SC, SMC> predicate) {
+    return new Transition.Buildr<>(this, eventType, predicate);
+  }
+
+  /**
    * [handlesEvent description]
    * @param  eventType [description]
    * @return           [description]

@@ -40,9 +40,11 @@ State machine
   - ~~kryo default serializer~~
   - ~~StateMachienDef arrange functions~~
   - ~~Contextless state~~
-  - Store event
+  - ~~Store event~~
   - failure with error
   - Errors and Exceptions
+  - Timestamp
+  - Custom thread factory
   - Logging
   - TapeLogFactory
 - Persistance with Cassandra

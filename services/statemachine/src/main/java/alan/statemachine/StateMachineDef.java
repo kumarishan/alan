@@ -21,6 +21,7 @@ import alan.core.MachineDef;
 import alan.core.Machine;
 import alan.core.Schema;
 import alan.core.TapeLog;
+import alan.util.FI.TriFunction;
 
 
 /**
@@ -50,7 +51,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
   private final Kryo kryo;
   private final Map<Class<?>, Function<?, String>> executionIdFactories;
   private final Map<S, StateDef<S, ?, SMC>> states;
-  private final Map<S, SinkStateDef<S, SMC, ?>> sinkStates;
+  private final Map<S, SinkStateDef<S, ?>> sinkStates;
   private final Map<String, S> nameToState;
   {
     kryo                 = new Kryo();
@@ -62,7 +63,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
     // defaults
     // default serde using jackson...
     executorServiceFactory = () -> ForkJoinPool.commonPool();
-    runtimeExceptionHandler = (S state, Object event, StateMachineActionContext<S, ?, SMC> context, Throwable exception) -> stop(exception);
+    runtimeExceptionHandler = (S state, Object event, StateActionContext<S, ?, SMC> context, Throwable exception) -> stop(exception);
   }
 
   /**
@@ -151,7 +152,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @param  context   [description]
    * @return           [description]
    */
-  <E, SC> Transition<S, E, SC, SMC> getTransition(E event, StateMachineActionContext<S, SC, SMC> context) {
+  <E, SC> Transition<S, E, SC, SMC> getTransition(E event, StateActionContext<S, SC, SMC> context) {
     @SuppressWarnings("unchecked")
     StateDef<S, SC, SMC> stateDef = (StateDef<S, SC, SMC>) states.get(context.getState());
     @SuppressWarnings("unchecked")
@@ -239,8 +240,8 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @return       the SinkState
    */
   @SuppressWarnings("unchecked")
-  SinkStateDef<S, SMC, Object> getSinkState(S state) {
-    return (SinkStateDef<S, SMC, Object>)sinkStates.get(state);
+  SinkStateDef<S, Object> getSinkState(S state) {
+    return (SinkStateDef<S, Object>)sinkStates.get(state);
   }
 
   /**
@@ -383,7 +384,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
   Object deserializeSinkStateResult(S sinkState, byte[] binary) {
     if (binary == null) return null;
     @SuppressWarnings("unchecked")
-    SinkStateDef<S, SMC, Object> sinkStateDef = (SinkStateDef<S, SMC, Object>)sinkStates.get(sinkState);
+    SinkStateDef<S, Object> sinkStateDef = (SinkStateDef<S, Object>)sinkStates.get(sinkState);
     if (sinkStateDef == null)
       throw new IllegalArgumentException("Sink state " + sinkStates + " not present");
     return kryoDeserialize(binary, sinkStateDef.getResultType());
@@ -486,11 +487,11 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @param  handler    [description]
    * @return            [description]
    */
-  protected <SC> void success(S state, Class<SC> resultType, Function<SMC, SC> action) {
+  protected <R> void success(S state, Class<R> resultType, Function<SMC, R> action) {
     if (sinkStates.containsKey(state) || states.containsKey(state))
       throw new IllegalArgumentException("State " + state + " is already defined, cannot use as new success state");
     addToNameToState(state);
-    sinkStates.put(state, new SinkStateDef<>(state, resultType, action, true));
+    sinkStates.put(state, new SuccessStateDef<S, SMC, R>(state, resultType, action));
   }
 
   /**
@@ -500,11 +501,11 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @param  handler    [description]
    * @return            [description]
    */
-  protected <SC> void successAsync(S state, Class<SC> resultType, BiFunction<SMC, ExecutorService, CompletableFuture<SC>> action) {
+  protected <R> void successAsync(S state, Class<R> resultType, BiFunction<SMC, ExecutorService, CompletableFuture<R>> action) {
     if (sinkStates.containsKey(state) || states.containsKey(state))
       throw new IllegalArgumentException("State " + state + " is already defined, cannot use as new success state");
     addToNameToState(state);
-    sinkStates.put(state, new SinkStateDef<>(state, resultType, action, true));
+    sinkStates.put(state, new SuccessStateDef<S, SMC, R>(state, resultType, action));
   }
 
   /**
@@ -514,11 +515,11 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @param  handler    [description]
    * @return            [description]
    */
-  protected <EC> void failure(S state, Class<EC> resultType, Function<SMC, EC> action) {
+  protected <R> void failure(S state, Class<R> resultType, BiFunction<SMC, Throwable, R> action) {
     if (states.containsKey(state))
       throw new IllegalArgumentException("State " + state + " is already defined, cannot use as new failure state");
     addToNameToState(state);
-    sinkStates.put(state, new SinkStateDef<>(state, resultType, action, false));
+    sinkStates.put(state, new FailureStateDef<S, SMC, R>(state, resultType, action));
   }
 
   /**
@@ -528,11 +529,11 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @param  handler    [description]
    * @return            [description]
    */
-  protected <EC> void failureAsync(S state, Class<EC> resultType, BiFunction<SMC, ExecutorService, CompletableFuture<EC>> action) {
+  protected <R> void failureAsync(S state, Class<R> resultType, TriFunction<SMC, Throwable, ExecutorService, CompletableFuture<R>> action) {
     if (states.containsKey(state))
       throw new IllegalArgumentException("State " + state + " is already defined, cannot use as new failure state");
     addToNameToState(state);
-    sinkStates.put(state, new SinkStateDef<>(state, resultType, action, false));
+    sinkStates.put(state, new FailureStateDef<S, SMC, R>(state, resultType, action));
   }
 
   /**
@@ -559,8 +560,8 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @param  stateType [description]
    * @return           [description]
    */
-  protected final Transition.To<S, ?> goTo(S state) {
-    return new Transition.To<>(state);
+  protected final Transition.GoTo<S, ?> goTo(S state) {
+    return new Transition.GoTo<>(state);
   }
 
   /**
@@ -568,22 +569,31 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @param  state [description]
    * @return       [description]
    */
-  protected final Transition.To<S, ?> failTo(S state) {
-    return new Transition.To<>(state);
+  protected final Transition.FailTo<S> failTo(S state) {
+    return new Transition.FailTo<>(state);
+  }
+
+  /**
+   * [failTo description]
+   * @param  state [description]
+   * @return       [description]
+   */
+  protected final Transition.FailTo<S> failTo(S state, Throwable exception) {
+    return new Transition.FailTo<>(state, exception);
   }
 
   /**
    *
    */
-  protected final Transition.To<S, ?> stop() {
-    return new Transition.Stop<>();
+  protected final Transition.Stop stop() {
+    return new Transition.Stop();
   }
 
   /**
    *
    */
-  protected final Transition.To<S, ?> stop(Throwable exception) {
-    return new Transition.Stop<>(exception);
+  protected final Transition.Stop stop(Throwable exception) {
+    return new Transition.Stop(exception);
   }
 
   /**

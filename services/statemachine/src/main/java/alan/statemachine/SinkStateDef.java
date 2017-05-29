@@ -9,67 +9,29 @@ import java.util.concurrent.CompletableFuture;
 /**
  *
  */
-class SinkStateDef<S, SMC, R> {
+interface SinkStateDef<S, R> {
 
-  private final S name;
-  private final Class<R> resultType;
-  private final BiFunction<SMC, ExecutorService, CompletableFuture<R>> asyncAction;
-  private final Function<SMC, R> action;
-  private final boolean isSuccess;
-
-  public SinkStateDef(S name, Class<R> resultType, Function<SMC, R> action, boolean isSuccess) {
-    this.name = name;
-    this.resultType = resultType;
-    this.asyncAction = null;
-    this.action = action;
-    this.isSuccess = isSuccess;
-  }
-
-  public SinkStateDef(S name, Class<R> resultType, BiFunction<SMC, ExecutorService, CompletableFuture<R>> asyncAction, boolean isSuccess) {
-    this.name = name;
-    this.resultType = resultType;
-    this.asyncAction = asyncAction;
-    this.action = null;
-    this.isSuccess = isSuccess;
-  }
+  /**
+   * [getState description]
+   * @return [description]
+   */
+  public S getState();
 
   /**
    *
    */
-  public Class<?> getResultType() {
-    return resultType;
-  }
-
-  /**
-   * [getAction description]
-   * @return [description]
-   */
-  public Function<SMC, R> getAction() {
-    return action;
-  }
-
-  /**
-   * [getAsyncAction description]
-   * @return [description]
-   */
-  public BiFunction<SMC, ExecutorService, CompletableFuture<R>> getAsyncAction() {
-    return asyncAction;
-  }
+  public Class<R> getResultType();
 
   /**
    * [isSuccess description]
    * @return [description]
    */
-  public final boolean isSuccess() {
-    return isSuccess;
-  }
+  public boolean isSuccess();
 
   /**
    * [isActionAsync description]
    * @return [description]
    */
-  public final boolean isActionAsync() {
-    return this.asyncAction != null;
-  }
+  public boolean isActionAsync();
 
 }

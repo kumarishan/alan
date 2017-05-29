@@ -6,14 +6,14 @@ import java.util.concurrent.ExecutorService;
 /**
  * [RENAME]
  */
-public final class StateMachineActionContext<S, SC, SMC> {
+public final class StateActionContext<S, SC, SMC> {
   private final S state;
   private SC stateContext;
   private SMC stateMachineContext;
   private final ExecutorService executorService;
   private final StateMachineDef<S, SMC> stateMachineDef;
 
-  StateMachineActionContext(S state, SC stateContext, SMC stateMachineContext, ExecutorService executorService, StateMachineDef<S, SMC> stateMachineDef) {
+  StateActionContext(S state, SC stateContext, SMC stateMachineContext, ExecutorService executorService, StateMachineDef<S, SMC> stateMachineDef) {
     this.state = state;
     this.stateContext = stateContext;
     this.stateMachineContext = stateMachineContext;
@@ -21,7 +21,7 @@ public final class StateMachineActionContext<S, SC, SMC> {
     this.stateMachineDef = stateMachineDef;
   }
 
-  StateMachineActionContext(S state, SC stateContext, SMC stateMachineContext, StateMachineDef<S, SMC> stateMachineDef) {
+  StateActionContext(S state, SC stateContext, SMC stateMachineContext, StateMachineDef<S, SMC> stateMachineDef) {
     this(state, stateContext, stateMachineContext, null, stateMachineDef);
   }
 
@@ -89,7 +89,7 @@ public final class StateMachineActionContext<S, SC, SMC> {
    * @param  service [description]
    * @return         [description]
    */
-  public StateMachineActionContext<S, SC, SMC> copy(ExecutorService service) {
-    return new StateMachineActionContext<>(state, stateContext, stateMachineContext, service, stateMachineDef);
+  public StateActionContext<S, SC, SMC> copy(ExecutorService service) {
+    return new StateActionContext<>(state, stateContext, stateMachineContext, service, stateMachineDef);
   }
 }

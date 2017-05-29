@@ -200,7 +200,7 @@ class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileConte
     // once in failure state, the Execution stage is marked as terminated
     // and failed
     // wont receive further events
-    failure(Failure, ErrorResult.class, (stateMachineContext) -> {
+    failure(Failure, ErrorResult.class, (stateMachineContext, exception) -> {
       return new ErrorResult(stateMachineContext.total);
     });
 

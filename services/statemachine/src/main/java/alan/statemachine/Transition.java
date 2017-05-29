@@ -4,7 +4,7 @@ import java.util.concurrent.CompletableFuture;
 
 
 /**
- * 
+ *
  */
 class Transition<S, E, SC, SMC> {
   private final Predicate<S, E, SC, SMC> predicate;
@@ -53,7 +53,7 @@ class Transition<S, E, SC, SMC> {
    * @param  context [description]
    * @return         [description]
    */
-  boolean check(E event, StateMachineActionContext<S, SC, SMC> context) {
+  boolean check(E event, StateActionContext<S, SC, SMC> context) {
     return (predicate == null ? true : predicate.apply(event, context));
   }
 
@@ -77,25 +77,6 @@ class Transition<S, E, SC, SMC> {
 
     public Buildr(StateDef<S, SC, SMC> stateDef) {
       this(stateDef, null);
-    }
-
-    /**
-     * [onEvent description]
-     * @param  eventType [description]
-     * @return           [description]
-     */
-    public <E1> Buildr<S, SC, SMC, E1> onEvent(Class<E1> eventType) {
-      return new Buildr<>(stateDef, eventType);
-    }
-
-    /**
-     * [onEvent description]
-     * @param  eventType [description]
-     * @param  predicate [description]
-     * @return           [description]
-     */
-    public <E1> Buildr<S, SC, SMC, E1> onEvent(Class<E1> eventType, Predicate<S, E1, SC, SMC> predicate) {
-      return new Buildr<>(stateDef, eventType, predicate);
     }
 
     /**
@@ -124,38 +105,58 @@ class Transition<S, E, SC, SMC> {
   /**
    *
    */
-  public static class To<S, SC> {
+  public static interface To {}
+
+  /**
+   *
+   */
+  public static class GoTo<S, SC> implements To {
     final S state;
     final SC contextOverride;
 
-    public To(S state, SC contextOverride) {
+    public GoTo(S state, SC contextOverride) {
       this.state = state;
       this.contextOverride = contextOverride;
     }
 
-    public To(S state) {
+    public GoTo(S state) {
       this(state, null);
     }
 
-    public <SC1> To<S, SC1> override(SC1 context) {
-      return new To<>(state, context);
+    public <SC1> GoTo<S, SC1> override(SC1 context) {
+      return new GoTo<>(state, context);
     }
   }
 
   /**
    *
    */
-  public static class Stop<S> extends To<S, Object> {
+  public static class FailTo<S> implements To {
+    final S state;
     final Throwable exception;
 
-    public Stop() {
-      super(null, null);
-      this.exception = null;
+    public FailTo(S state, Throwable exception) {
+      this.state = state;
+      this.exception = exception;
     }
 
+    public FailTo(S state) {
+      this(state, null);
+    }
+  }
+
+  /**
+   *
+   */
+  public static class Stop implements To {
+    final Throwable exception;
+
     public Stop(Throwable exception) {
-      super(null, null);
       this.exception = exception;
+    }
+
+    public Stop() {
+      this(null);
     }
   }
 
@@ -164,7 +165,7 @@ class Transition<S, E, SC, SMC> {
    */
   @FunctionalInterface
   public static interface Predicate<S, E, SC, SMC> {
-    public boolean apply(E event, StateMachineActionContext<S, SC, SMC> context);
+    public boolean apply(E event, StateActionContext<S, SC, SMC> context);
   }
 
   /**
@@ -172,7 +173,7 @@ class Transition<S, E, SC, SMC> {
    */
   @FunctionalInterface
   public static interface Action<S, E, SC, SMC> {
-    public To<S, ?> apply(E event, StateMachineActionContext<S, SC, SMC> context) throws Throwable;
+    public To apply(E event, StateActionContext<S, SC, SMC> context) throws Throwable;
   }
 
   /**
@@ -180,6 +181,6 @@ class Transition<S, E, SC, SMC> {
    */
   @FunctionalInterface
   public static interface AsyncAction<S, E, SC, SMC> {
-    public CompletableFuture<To<S, ?>> apply(E event, StateMachineActionContext<S, SC, SMC> context);
+    public CompletableFuture<To> apply(E event, StateActionContext<S, SC, SMC> context);
   }
 }
