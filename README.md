@@ -36,17 +36,19 @@ State machine
 - Code refactoring (class designs)
   - ~~Interfaces~~
   - ~~Introduce Tape based persistance~~
-  - Logging
-  - TapeLogFactory
+  - ~~Fix Fluent State def~~
+  - ~~kryo default serializer~~
   - StateMachienDef arrange functions
-  - Retry/Blocking queue
   - Contextless state
-  - jackson default serializer
   - Store event
   - Errors and Exceptions
+  - Logging
+  - TapeLogFactory
 - Persistance with Cassandra
 - Lock using Apache Zookeeper
 - Test run (db store)
+- Revisit executor
+  - Retry/Blocking queue
 - Comments + License + README documentation
 - Configurator and Factories support using typesafe-config
 - Benchmark and Optimizations

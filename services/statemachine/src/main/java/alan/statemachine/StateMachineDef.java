@@ -8,6 +8,13 @@ import java.util.function.Supplier;
 import java.util.function.Function;
 import java.util.function.BiFunction;
 import java.util.concurrent.CompletableFuture;
+import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
+
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Output;
+import com.esotericsoftware.kryo.io.Input;
 
 import alan.core.ExecutionId;
 import alan.core.MachineDef;
@@ -36,19 +43,17 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
   private Supplier<ExecutorService> executorServiceFactory;
   private Class<SMC> stateMachineContextType;
 
+  private final Kryo kryo;
   private final Map<Class<?>, Function<?, String>> executionIdFactories;
   private final Map<S, StateDef<S, ?, SMC>> states;
   private final Map<S, SinkStateDef<S, SMC, ?>> sinkStates;
   private final Map<String, S> nameToState;
-  private final Map<Class<?>, ContextSerializer<?>> serializers;
-  private final Map<Class<?>, ContextDeserializer<?>> deserializers;
   {
+    kryo                 = new Kryo();
     executionIdFactories = new HashMap<>();
     states               = new HashMap<>();
     nameToState          = new HashMap<>();
     sinkStates           = new HashMap<>();
-    serializers          = new HashMap<>();
-    deserializers        = new HashMap<>();
 
     // defaults
     // default serde using jackson...
@@ -274,13 +279,48 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
   }
 
   /**
+   * [kryoSerialize description]
+   * @param  object [description]
+   * @return        [description]
+   */
+  private byte[] kryoSerialize(Object object) {
+    try {
+      ByteArrayOutputStream stream = new ByteArrayOutputStream();
+      Output output = new Output(stream);
+      kryo.writeObject(output, object);
+      output.close(); // Also calls output.flush()
+      return stream.toByteArray();
+    } catch (Throwable ex) {
+      ex.printStackTrace();
+      throw ex;
+    }
+  }
+
+  /**
+   * [kryoDeserialize description]
+   * @param  binary [description]
+   * @param  type   [description]
+   * @return        [description]
+   */
+  private <T> T kryoDeserialize(byte[] binary, Class<T> type) {
+    try {
+    ByteArrayInputStream stream = new ByteArrayInputStream(binary);
+    Input input = new Input(stream);
+    return kryo.readObject(input, type);
+
+    } catch (Throwable ex) {
+      ex.printStackTrace();
+      throw ex;
+    }
+  }
+
+  /**
    * [serializeStateMachineContext description]
    * @param  context [description]
    * @return         [description]
    */
-  @SuppressWarnings("unchecked")
   byte[] serializeStateMachineContext(SMC context) {
-    return ((ContextSerializer<SMC>)serializers.get(context.getClass())).apply(context);
+    return kryoSerialize(context);
   }
 
   /**
@@ -288,9 +328,8 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @param  binary [description]
    * @return        [description]
    */
-  @SuppressWarnings("unchecked")
   SMC deserializeStateMachineContext(byte[] binary) {
-    return (SMC)deserializers.get(stateMachineContextType).apply(binary);
+    return kryoDeserialize(binary, stateMachineContextType);
   }
 
   /**
@@ -300,7 +339,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    */
   @SuppressWarnings("unchecked")
   byte[] serializeStateContext(Object context) {
-    return ((ContextSerializer<Object>)serializers.get(context.getClass())).apply(context);
+    return kryoSerialize(context);
   }
 
   /**
@@ -311,12 +350,10 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    */
   Object deserializeStateContext(S state, byte[] binary) {
     @SuppressWarnings("unchecked")
-    StateDef<S, Object, SMC> internalState = (StateDef<S, Object, SMC>)states.get(state);
-    if (internalState == null)
+    StateDef<S, Object, SMC> stateDef = (StateDef<S, Object, SMC>)states.get(state);
+    if (stateDef == null)
       throw new IllegalArgumentException("Un registered state(" + state + "), it should be first defined using state(...)");
-    @SuppressWarnings("unchecked")
-    Object context = ((ContextDeserializer<Object>)deserializers.get(internalState.getContextType())).apply(binary);
-    return context;
+    return kryoDeserialize(binary, stateDef.getContextType());
   }
 
   /**
@@ -327,7 +364,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    */
   @SuppressWarnings("unchecked")
   byte[] serializeSinkStateResult(Object result) {
-    return ((ContextSerializer<Object>)serializers.get(result.getClass())).apply(result);
+    return kryoSerialize(result);
   }
 
   /**
@@ -338,12 +375,10 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    */
   Object deserializeSinkStateResult(S sinkState, byte[] binary) {
     @SuppressWarnings("unchecked")
-    SinkStateDef<S, SMC, Object> internalSinkState = (SinkStateDef<S, SMC, Object>)sinkStates.get(sinkState);
-    if (internalSinkState == null)
+    SinkStateDef<S, SMC, Object> sinkStateDef = (SinkStateDef<S, SMC, Object>)sinkStates.get(sinkState);
+    if (sinkStateDef == null)
       throw new IllegalArgumentException("Sink state " + sinkStates + " not present");
-    @SuppressWarnings("unchecked")
-    Object result = ((ContextDeserializer<Object>)deserializers.get(internalSinkState.getResultType())).apply(binary);
-    return result;
+    return kryoDeserialize(binary, sinkStateDef.getResultType());
   }
 
   //////////////////////////////////// Definition helper methods ///////////////////////////////////////////////////
@@ -520,26 +555,33 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
   }
 
   /**
-   * [serde description]
-   * @param  clazz        [description]
-   * @param  serializer   [description]
-   * @param  deserializer [description]
-   * @return              [description]
+   * [kryo description]
+   * @param  clazz [description]
+   * @param  id    [description]
+   * @return       [description]
    */
-  protected final <T> void serde(Class<T> clazz, ContextSerializer<T> serializer, ContextDeserializer<T> deserializer) {
-    serializers.put(clazz, serializer);
-    deserializers.put(clazz, deserializer);
+  protected final <T> void kryo(Class<T> clazz, int id) {
+    kryo.register(clazz, id);
+  }
+
+  /**
+   * [kryo description]
+   * @param  clazz      [description]
+   * @param  serializer [description]
+   * @return            [description]
+   */
+  protected final <T> void kryo(Class<T> clazz, Serializer<T> serializer) {
+    kryo.register(clazz, serializer);
   }
 
   /**
    * [verify description]
    */
-  protected final void verify() {
+  protected final void init() {
     if (this.name == null)
       throw new IllegalArgumentException("State Machine name not specified");
     checkStates();
     checkStateMachineContext();
-    checkSinkStates();
   }
 
   /**
@@ -547,9 +589,6 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    */
   private void checkStates() {
     for (S state : states.keySet()) {
-      Class<?> contextType = states.get(state).getContextType();
-      if (!(serializers.containsKey(contextType) && deserializers.containsKey(contextType)))
-        throw new IllegalArgumentException("Serializers not defined for " + contextType.getName());
       for (Class<?> eventType : states.get(state).getEventTypes()) {
         if (!executionIdFactories.containsKey(eventType))
           throw new IllegalArgumentException("No execution id factory for event type " + eventType.getName());
@@ -563,19 +602,6 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
   private void checkStateMachineContext() {
     if (stateMachineContextFactory == null)
       throw new IllegalArgumentException("State Machine context factory not defined");
-    if (!(serializers.containsKey(stateMachineContextType) && deserializers.containsKey(stateMachineContextType)))
-      throw new IllegalArgumentException("Serializers not defined for state machine context");
-  }
-
-  /**
-   * [checkSinkStates description]
-   */
-  private void checkSinkStates() {
-    for (S state : sinkStates.keySet()) {
-      Class<?> resultType = sinkStates.get(state).getResultType();
-      if (!(serializers.containsKey(resultType) && deserializers.containsKey(resultType)))
-        throw new IllegalArgumentException("Serializers not defined for sink state result type " + resultType.getName());
-    }
   }
 
   /**

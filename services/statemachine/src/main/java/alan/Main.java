@@ -34,6 +34,7 @@ class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileConte
   static class EventOne {
     String turnstile;
     int increment;
+    public EventOne() {}
     public EventOne(String turnstile, int increment) {
       this.turnstile = turnstile;
       this.increment = increment;
@@ -43,6 +44,7 @@ class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileConte
   static class EventTwo {
     String turnstile;
     int decrement;
+    public EventTwo() {}
     public EventTwo(String turnstile, int decrement) {
       this.turnstile = turnstile;
       this.decrement = decrement;
@@ -51,6 +53,7 @@ class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileConte
 
   static class StateOneContext {
     int count;
+    public StateOneContext() {}
     public StateOneContext(int count) {
       this.count = count;
     }
@@ -58,6 +61,7 @@ class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileConte
 
   static class StateTwoContext {
     int count;
+    public StateTwoContext() {}
     public StateTwoContext(int count) {
       this.count = count;
     }
@@ -65,6 +69,7 @@ class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileConte
 
   static class ErrorResult {
     int total;
+    public ErrorResult() {}
     public ErrorResult(int total) {
       this.total = total;
     }
@@ -72,6 +77,7 @@ class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileConte
 
   static class SuccessResult {
     int total;
+    public SuccessResult() {}
     public SuccessResult(int total) {
       this.total = total;
     }
@@ -79,12 +85,13 @@ class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileConte
 
   static class TurnstileContext {
     int total;
+    public TurnstileContext() {}
     public TurnstileContext(int total) {
       this.total = total;
     }
   }
 
-  Logger logger = LoggerFactory.getLogger(this.getClass());
+  Logger LOG = LoggerFactory.getLogger(this.getClass());
 
   {
     name("my-fsm");
@@ -115,7 +122,7 @@ class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileConte
               context.getStateContext().count += event.increment;
               context.getStateMachineContext().total += event.increment;
 
-              logger.debug("In state {} received event {} state machine context total = {}, State context count = {}",
+              LOG.debug("In state {} received event {} state machine context total = {}, State context count = {}",
                   context.getState(), event.getClass().getName(), context.getStateMachineContext().total, context.getStateContext().count);
 
               if (context.getStateMachineContext().total > 8)
@@ -129,7 +136,7 @@ class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileConte
     stateOne.onEvent(EventTwo.class)
             .perform((event, context) -> {
               context.getStateMachineContext().total -= event.decrement;
-              logger.debug("In state {} received event {} state machine context total = {}",
+              LOG.debug("In state {} received event {} state machine context total = {}",
                   context.getState(), event.getClass().getName(), context.getStateMachineContext().total);
               return goTo(StateTwo);
             });
@@ -139,7 +146,7 @@ class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileConte
               context.getStateContext().count += event.decrement;
               context.getStateMachineContext().total -= event.decrement;
 
-              logger.debug("In state {} received event {} state machine context total = {} state context count = {}",
+              LOG.debug("In state {} received event {} state machine context total = {} state context count = {}",
                   context.getState(), event.getClass().getName(), context.getStateMachineContext().total, context.getStateContext().count);
 
               if (context.getStateMachineContext().total < -20)
@@ -152,7 +159,7 @@ class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileConte
 
     stateTwo.onEvent(EventOne.class)
             .perform((event, context) -> {
-              logger.debug("In state {} received event {} state machine context total = {}",
+              LOG.debug("In state {} received event {} state machine context total = {}",
                   context.getState(), event.getClass().getName(), context.getStateMachineContext().total);
 
               context.getStateMachineContext().total += event.increment;
@@ -192,27 +199,10 @@ class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileConte
     );
 
     // serializers
-    serde(TurnstileContext.class,
-      (context) -> intToByteArray(context.total),
-      (binary) -> new TurnstileContext(byteArrayToInt(binary)));
+    kryo(TurnstileContext.class, 10);
+    kryo(StateOneContext.class, 11);
 
-    serde(StateOneContext.class,
-      (context) -> intToByteArray(context.count),
-      (binary) -> new StateOneContext(byteArrayToInt(binary)));
-
-    serde(StateTwoContext.class,
-      (context) -> intToByteArray(context.count),
-      (binary) -> new StateTwoContext(byteArrayToInt(binary)));
-
-    serde(SuccessResult.class,
-      (result) -> intToByteArray(result.total),
-      (binary) -> new SuccessResult(byteArrayToInt(binary)));
-
-    serde(ErrorResult.class,
-      (result) -> intToByteArray(result.total),
-      (binary) -> new ErrorResult(byteArrayToInt(binary)));
-
-    verify();
+    init();
   }
 
   private static byte[] intToByteArray(int num) {
