@@ -38,9 +38,10 @@ State machine
   - ~~Introduce Tape based persistance~~
   - ~~Fix Fluent State def~~
   - ~~kryo default serializer~~
-  - StateMachienDef arrange functions
-  - Contextless state
+  - ~~StateMachienDef arrange functions~~
+  - ~~Contextless state~~
   - Store event
+  - failure with error
   - Errors and Exceptions
   - Logging
   - TapeLogFactory

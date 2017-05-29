@@ -184,13 +184,14 @@ class StateMachine<S, SMC> implements Machine {
     String prevStateStr = stateMachineDef.nameFor(prevState);
     byte[] prevStateContextBinary = stateMachineDef.serializeStateContext(prevStateContext);
     String prevTriggerEventType = event.getClass().getName();
+    byte[] prevTriggerEventBinary = stateMachineDef.serializeEvent(event);
 
     if (to instanceof Transition.Stop) {
       @SuppressWarnings("unchecked")
       Transition.Stop<S> stop = (Transition.Stop<S>) to;
       StateMachineTape tape = StateMachineTape.Stop(id, step, stateMachineContextBinary,
                                                     stop.exception.toString(),
-                                                    prevStateStr, prevStateContextBinary, prevTriggerEventType);
+                                                    prevStateStr, prevStateContextBinary, prevTriggerEventType, prevTriggerEventBinary);
       commands.add(Push(id, tape));
       return tapeLog.execute(commands)
                     .thenApplyAsync((success) -> {
@@ -202,7 +203,7 @@ class StateMachine<S, SMC> implements Machine {
         .thenComposeAsync((result) -> {
           StateMachineTape tape = StateMachineTape.Success(id, step, stateMachineContextBinary,
                                                            stateMachineDef.nameFor(to.state), stateMachineDef.serializeSinkStateResult(result),
-                                                           prevStateStr, prevStateContextBinary, prevTriggerEventType);
+                                                           prevStateStr, prevStateContextBinary, prevTriggerEventType, prevTriggerEventBinary);
           commands.add(Push(id, tape));
           return tapeLog.execute(commands)
                         .thenApplyAsync((success) -> {
@@ -215,7 +216,7 @@ class StateMachine<S, SMC> implements Machine {
         .thenComposeAsync((result) -> {
           StateMachineTape tape = StateMachineTape.Failure(id, step, stateMachineContextBinary,
                                                            stateMachineDef.nameFor(to.state), stateMachineDef.serializeSinkStateResult(result),
-                                                           prevStateStr, prevStateContextBinary, prevTriggerEventType);
+                                                           prevStateStr, prevStateContextBinary, prevTriggerEventType, prevTriggerEventBinary);
           commands.add(Push(id, tape));
           return tapeLog.execute(commands)
                         .thenApplyAsync((success) -> {
@@ -229,7 +230,7 @@ class StateMachine<S, SMC> implements Machine {
         byte[] contextOverride = stateMachineDef.serializeStateContext(to.contextOverride);
         StateMachineTape tape = StateMachineTape.Stage(id, step, stateMachineContextBinary,
                                                       toStateStr, contextOverride, ContextLabel.OVERRIDE,
-                                                      prevStateStr, prevStateContextBinary, prevTriggerEventType);
+                                                      prevStateStr, prevStateContextBinary, prevTriggerEventType, prevTriggerEventBinary);
         commands.add(Push(id, tape));
         return tapeLog.execute(commands)
                       .thenApplyAsync((success) -> {
@@ -247,7 +248,7 @@ class StateMachine<S, SMC> implements Machine {
                         }
                         StateMachineTape tape = StateMachineTape.Stage(id, step, stateMachineContextBinary,
                                                                        toStateStr, stateContext, label,
-                                                                       prevStateStr, prevStateContextBinary, prevTriggerEventType);
+                                                                       prevStateStr, prevStateContextBinary, prevTriggerEventType, prevTriggerEventBinary);
                         commands.add(Push(id, tape));
                         return tapeLog.execute(commands)
                                       .thenApplyAsync((success) -> {

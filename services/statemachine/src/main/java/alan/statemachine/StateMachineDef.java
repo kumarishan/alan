@@ -389,6 +389,26 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
     return kryoDeserialize(binary, sinkStateDef.getResultType());
   }
 
+  /**
+   * [serializeEvent description]
+   * @param  event [description]
+   * @return       [description]
+   */
+  byte[] serializeEvent(Object event) {
+    assert(event != null);
+    return kryoSerialize(event);
+  }
+
+  /**
+   * [deserializeEvent description]
+   * @param  binary    [description]
+   * @param  eventType [description]
+   * @return           [description]
+   */
+  Object deserializeEvent(byte[] binary, Class<?> eventType) {
+    return kryoDeserialize(binary, eventType);
+  }
+
   //////////////////////////////////// Definition helper methods ///////////////////////////////////////////////////
 
   /**

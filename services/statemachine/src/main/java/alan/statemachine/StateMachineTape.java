@@ -31,26 +31,26 @@ public abstract class StateMachineTape extends Tape {
   public static Stage Stage(ExecutionId id, int step, byte[] stateMachineContext,
                                         String currentState, byte[] currentStateContext, ContextLabel contextLabel,
                                         String prevState, byte[] prevStateContext,
-                                        String triggerEvent) {
-    return new Stage(id, step, stateMachineContext, currentState, currentStateContext, contextLabel, prevState, prevStateContext, triggerEvent);
+                                        String triggerEventType, byte[] triggerEvent) {
+    return new Stage(id, step, stateMachineContext, currentState, currentStateContext, contextLabel, prevState, prevStateContext, triggerEventType, triggerEvent);
   }
 
   public static Stop Stop(ExecutionId id, int step, byte[] stateMachineContext,
                                       String exception, String state, byte[] stateContext,
-                                      String triggerEvent) {
-    return new Stop(id, step, stateMachineContext, exception, state, stateContext, triggerEvent);
+                                      String triggerEventType, byte[] triggerEvent) {
+    return new Stop(id, step, stateMachineContext, exception, state, stateContext, triggerEventType, triggerEvent);
   }
 
   public static Failure Failure(ExecutionId id, int step, byte[] stateMachineContext,
                                          String state, byte[] result, String fromState, byte[] fromStateContext,
-                                         String triggerEvent) {
-    return new Failure(id, step, stateMachineContext, state, result, fromState, fromStateContext, triggerEvent);
+                                         String triggerEventType, byte[] triggerEvent) {
+    return new Failure(id, step, stateMachineContext, state, result, fromState, fromStateContext, triggerEventType, triggerEvent);
   }
 
   public static Success Success(ExecutionId id, int step, byte[] stateMachineContext,
                                          String state, byte[] result, String fromState, byte[] fromStateContext,
-                                         String triggerEvent) {
-    return new Success(id, step, stateMachineContext, state, result, fromState, fromStateContext, triggerEvent);
+                                         String triggerEventType, byte[] triggerEvent) {
+    return new Success(id, step, stateMachineContext, state, result, fromState, fromStateContext, triggerEventType, triggerEvent);
   }
 
   //////////////////////////////////// Tapes /////////////////////////////////////
@@ -104,18 +104,20 @@ public abstract class StateMachineTape extends Tape {
     ContextLabel contextLabel;
     String prevState;
     byte[] prevStateContext;
-    String triggerEvent;
+    String triggerEventType;
+    byte[] triggerEvent;
 
     public Stage(ExecutionId id, int step, byte[] stateMachineContext,
                       String currentState, byte[] currentStateContext, ContextLabel contextLabel,
                       String prevState, byte[] prevStateContext,
-                      String triggerEvent) {
+                      String triggerEventType, byte[] triggerEvent) {
       super(id, step, LIVE, stateMachineContext);
       this.currentState = currentState;
       this.currentStateContext = currentStateContext;
       this.contextLabel = contextLabel;
       this.prevState = prevState;
       this.prevStateContext = prevStateContext;
+      this.triggerEventType = triggerEventType;
       this.triggerEvent = triggerEvent;
     }
 
@@ -135,7 +137,8 @@ public abstract class StateMachineTape extends Tape {
       row.put("contextLabel", String.class, stage.contextLabel.toString());
       row.put("prevState", String.class, stage.prevState);
       row.put("prevStateContext", byte[].class, stage.prevStateContext);
-      row.put("triggerEvent", String.class, stage.triggerEvent);
+      row.put("triggerEventType", String.class, stage.triggerEventType);
+      row.put("triggerEvent", byte[].class, stage.triggerEvent);
       return row;
     }
 
@@ -149,7 +152,8 @@ public abstract class StateMachineTape extends Tape {
         ContextLabel.valueOf(String.class.cast(row.get("contextLabel").value)),
         String.class.cast(row.get("prevState").value),
         byte[].class.cast(row.get("prevStateContext").value),
-        String.class.cast(row.get("triggerEvent").value)
+        String.class.cast(row.get("triggerEventType").value),
+        byte[].class.cast(row.get("triggerEvent").value)
       );
     }
   }
@@ -161,15 +165,17 @@ public abstract class StateMachineTape extends Tape {
     String exception;
     String state;
     byte[] stateContext;
-    String triggerEvent;
+    String triggerEventType;
+    byte[] triggerEvent;
 
     public Stop(ExecutionId id, int step, byte[] stateMachineContext,
                 String exception, String state, byte[] stateContext,
-                String triggerEvent) {
+                String triggerEventType, byte[] triggerEvent) {
       super(id, step, STOPPED, stateMachineContext);
       this.exception = exception;
       this.state = state;
       this.stateContext = stateContext;
+      this.triggerEventType = triggerEventType;
       this.triggerEvent = triggerEvent;
     }
 
@@ -187,7 +193,8 @@ public abstract class StateMachineTape extends Tape {
       row.put("exception", String.class, stop.exception);
       row.put("state", String.class, stop.state);
       row.put("stateContext", byte[].class, stop.stateContext);
-      row.put("triggerEvent", String.class, stop.triggerEvent);
+      row.put("triggerEventType", String.class, stop.triggerEventType);
+      row.put("triggerEvent", byte[].class, stop.triggerEvent);
       return row;
     }
 
@@ -199,7 +206,8 @@ public abstract class StateMachineTape extends Tape {
         String.class.cast(row.get("exception").value),
         String.class.cast(row.get("state").value),
         byte[].class.cast(row.get("stateContext").value),
-        String.class.cast(row.get("triggerEvent").value)
+        String.class.cast(row.get("triggerEventType").value),
+        byte[].class.cast(row.get("triggerEvent").value)
       );
     }
   }
@@ -212,16 +220,18 @@ public abstract class StateMachineTape extends Tape {
     byte[] result;
     String fromState;
     byte[] fromStateContext;
-    String triggerEvent;
+    String triggerEventType;
+    byte[] triggerEvent;
 
     public Failure(ExecutionId id, int step, byte[] stateMachineContext,
                    String state, byte[] result, String fromState, byte[] fromStateContext,
-                   String triggerEvent) {
+                   String triggerEventType, byte[] triggerEvent) {
       super(id, step, FAILED, stateMachineContext);
       this.state = state;
       this.result = result;
       this.fromState = fromState;
       this.fromStateContext = fromStateContext;
+      this.triggerEventType = triggerEventType;
       this.triggerEvent = triggerEvent;
     }
 
@@ -240,7 +250,8 @@ public abstract class StateMachineTape extends Tape {
       row.put("result", byte[].class, failure.result);
       row.put("fromState", String.class, failure.fromState);
       row.put("fromStateContext", byte[].class, failure.fromStateContext);
-      row.put("triggerEvent", String.class, failure.triggerEvent);
+      row.put("triggerEventType", String.class, failure.triggerEventType);
+      row.put("triggerEvent", byte[].class, failure.triggerEvent);
       return row;
     }
 
@@ -253,7 +264,8 @@ public abstract class StateMachineTape extends Tape {
         byte[].class.cast(row.get("result").value),
         String.class.cast(row.get("fromState").value),
         byte[].class.cast(row.get("fromStateContext").value),
-        String.class.cast(row.get("triggerEvent").value)
+        String.class.cast(row.get("triggerEventType").value),
+        byte[].class.cast(row.get("triggerEvent").value)
       );
     }
   }
@@ -266,16 +278,18 @@ public abstract class StateMachineTape extends Tape {
     byte[] result;
     String fromState;
     byte[] fromStateContext;
-    String triggerEvent;
+    String triggerEventType;
+    byte[] triggerEvent;
 
     public Success(ExecutionId id, int step, byte[] stateMachineContext,
                    String state, byte[] result, String fromState, byte[] fromStateContext,
-                   String triggerEvent) {
+                   String triggerEventType, byte[] triggerEvent) {
       super(id, step, SUCCEEDED, stateMachineContext);
       this.state = state;
       this.result = result;
       this.fromState = fromState;
       this.fromStateContext = fromStateContext;
+      this.triggerEventType = triggerEventType;
       this.triggerEvent = triggerEvent;
     }
 
@@ -294,7 +308,8 @@ public abstract class StateMachineTape extends Tape {
       row.put("result", byte[].class, success.result);
       row.put("fromState", String.class, success.fromState);
       row.put("fromStateContext", byte[].class, success.fromStateContext);
-      row.put("triggerEvent", String.class, success.triggerEvent);
+      row.put("triggerEventType", String.class, success.triggerEventType);
+      row.put("triggerEvent", byte[].class, success.triggerEvent);
       return row;
     }
 
@@ -307,7 +322,8 @@ public abstract class StateMachineTape extends Tape {
         byte[].class.cast(row.get("result").value),
         String.class.cast(row.get("fromState").value),
         byte[].class.cast(row.get("fromStateContext").value),
-        String.class.cast(row.get("triggerEvent").value)
+        String.class.cast(row.get("triggerEventType").value),
+        byte[].class.cast(row.get("triggerEvent").value)
       );
     }
   }
