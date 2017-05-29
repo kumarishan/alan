@@ -18,16 +18,16 @@ import alan.statemachine.StateMachineSchema;
 import alan.statemachine.StateMachineTape;
 import alan.statemachine.StateMachineDef;
 
-import static alan.Turnstile.State.*;
-import static alan.Turnstile.State;
+import static alan.Turnstile.TurnstileState.*;
+import static alan.Turnstile.TurnstileState;
 import static alan.Turnstile.*;
 
 /**
  *
  */
-class Turnstile extends StateMachineDef<Turnstile.State, TurnstileContext> {
+class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileContext> {
 
-  static enum State {
+  static enum TurnstileState {
     StateOne, StateTwo, Success, Failure
   }
 
@@ -107,52 +107,57 @@ class Turnstile extends StateMachineDef<Turnstile.State, TurnstileContext> {
     //   - Action can mutate or reset state context
     //   - Action should return TransitionActions like goTo, failTo, stay()
 
-    state(StateOne, StateOneContext.class, () -> new StateOneContext(0))
-      .onEvent(EventOne.class).perform((event, context) -> {
-        context.getStateContext().count += event.increment;
-        context.getStateMachineContext().total += event.increment;
+    State<StateOneContext> stateOne = defineState(StateOne, StateOneContext.class, () -> new StateOneContext(0));
+    State<StateTwoContext> stateTwo = defineState(StateTwo, StateTwoContext.class, () -> new StateTwoContext(0));
 
-        logger.debug("In state {} received event {} state machine context total = {}, State context count = {}",
-            context.getState(), event.getClass().getName(), context.getStateMachineContext().total, context.getStateContext().count);
+    stateOne.onEvent(EventOne.class)
+            .perform((event, context) -> {
+              context.getStateContext().count += event.increment;
+              context.getStateMachineContext().total += event.increment;
 
-        if (context.getStateMachineContext().total > 8)
-          return goTo(Success);
-        else if (context.getStateMachineContext().total > 5)
-          return goTo(StateTwo);
-        else
-          return goTo(StateOne);
-      })
-      .onEvent(EventTwo.class).perform((event, context) -> {
-        context.getStateMachineContext().total -= event.decrement;
-        logger.debug("In state {} received event {} state machine context total = {}",
-            context.getState(), event.getClass().getName(), context.getStateMachineContext().total);
-        return goTo(StateTwo);
-      });
+              logger.debug("In state {} received event {} state machine context total = {}, State context count = {}",
+                  context.getState(), event.getClass().getName(), context.getStateMachineContext().total, context.getStateContext().count);
 
+              if (context.getStateMachineContext().total > 8)
+                return goTo(Success);
+              else if (context.getStateMachineContext().total > 5)
+                return goTo(StateTwo);
+              else
+                return goTo(StateOne);
+            });
 
-    state(StateTwo, StateTwoContext.class, () -> new StateTwoContext(0))
-      .onEvent(EventTwo.class).perform((event, context) -> {
+    stateOne.onEvent(EventTwo.class)
+            .perform((event, context) -> {
+              context.getStateMachineContext().total -= event.decrement;
+              logger.debug("In state {} received event {} state machine context total = {}",
+                  context.getState(), event.getClass().getName(), context.getStateMachineContext().total);
+              return goTo(StateTwo);
+            });
 
-        context.getStateContext().count += event.decrement;
-        context.getStateMachineContext().total -= event.decrement;
+    stateTwo.onEvent(EventTwo.class)
+            .perform((event, context) -> {
+              context.getStateContext().count += event.decrement;
+              context.getStateMachineContext().total -= event.decrement;
 
-        logger.debug("In state {} received event {} state machine context total = {} state context count = {}",
-            context.getState(), event.getClass().getName(), context.getStateMachineContext().total, context.getStateContext().count);
+              logger.debug("In state {} received event {} state machine context total = {} state context count = {}",
+                  context.getState(), event.getClass().getName(), context.getStateMachineContext().total, context.getStateContext().count);
 
-        if (context.getStateMachineContext().total < -20)
-          return goTo(Failure);
-        else if (context.getStateMachineContext().total < 0)
-          return goTo(StateOne);
-        else
-          return goTo(StateTwo);
-      })
-      .onEvent(EventOne.class).perform((event, context) -> {
-        logger.debug("In state {} received event {} state machine context total = {}",
-            context.getState(), event.getClass().getName(), context.getStateMachineContext().total);
+              if (context.getStateMachineContext().total < -20)
+                return goTo(Failure);
+              else if (context.getStateMachineContext().total < 0)
+                return goTo(StateOne);
+              else
+                return goTo(StateTwo);
+            });
 
-        context.getStateMachineContext().total += event.increment;
-        return goTo(StateOne);
-      });
+    stateTwo.onEvent(EventOne.class)
+            .perform((event, context) -> {
+              logger.debug("In state {} received event {} state machine context total = {}",
+                  context.getState(), event.getClass().getName(), context.getStateMachineContext().total);
+
+              context.getStateMachineContext().total += event.increment;
+              return goTo(StateOne);
+            });
 
     // always call after state is defined
     start(StateOne);

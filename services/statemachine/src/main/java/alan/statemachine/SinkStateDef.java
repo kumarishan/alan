@@ -9,7 +9,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  *
  */
-class SinkState<S, SMC, R> {
+class SinkStateDef<S, SMC, R> {
 
   private final S name;
   private final Class<R> resultType;
@@ -17,7 +17,7 @@ class SinkState<S, SMC, R> {
   private final Function<SMC, R> action;
   private final boolean isSuccess;
 
-  public SinkState(S name, Class<R> resultType, Function<SMC, R> action, boolean isSuccess) {
+  public SinkStateDef(S name, Class<R> resultType, Function<SMC, R> action, boolean isSuccess) {
     this.name = name;
     this.resultType = resultType;
     this.asyncAction = null;
@@ -25,7 +25,7 @@ class SinkState<S, SMC, R> {
     this.isSuccess = isSuccess;
   }
 
-  public SinkState(S name, Class<R> resultType, BiFunction<SMC, ExecutorService, CompletableFuture<R>> asyncAction, boolean isSuccess) {
+  public SinkStateDef(S name, Class<R> resultType, BiFunction<SMC, ExecutorService, CompletableFuture<R>> asyncAction, boolean isSuccess) {
     this.name = name;
     this.resultType = resultType;
     this.asyncAction = asyncAction;

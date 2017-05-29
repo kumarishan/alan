@@ -42,6 +42,8 @@ State machine
   - Retry/Blocking queue
   - Contextless state
   - jackson default serializer
+  - Store event
+  - Errors and Exceptions
 - Persistance with Cassandra
 - Lock using Apache Zookeeper
 - Test run (db store)
