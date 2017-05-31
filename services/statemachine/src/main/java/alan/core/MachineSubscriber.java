@@ -17,8 +17,8 @@ public class MachineSubscriber implements Subscriber {
    * [getId description]
    * @return [description]
    */
-  public String getId() {
-    return executor.getStateMachineId();
+  public String getName() {
+    return executor.getName();
   }
 
   /**

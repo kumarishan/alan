@@ -97,7 +97,7 @@ public class MachineExecutor<S, SMC, T extends Tape> {
    * [getStateMachineId description]
    * @return [description]
    */
-  public final String getStateMachineId() {
+  public final String getName() {
     return machineDef.getName();
   }
 
