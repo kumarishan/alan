@@ -12,12 +12,14 @@ public abstract class Tape {
   public final int step;
   public final Status status;
   public final byte[] stateMachineContext;
+  public final long timestamp;
 
-  public Tape(ExecutionId id, int step, Status status, byte[] stateMachineContext) {
+  public Tape(ExecutionId id, int step, Status status, byte[] stateMachineContext, long timestamp) {
     this.id = id;
     this.step = step;
     this.status = status;
     this.stateMachineContext = stateMachineContext;
+    this.timestamp = timestamp;
   }
 
   public boolean isNew() {

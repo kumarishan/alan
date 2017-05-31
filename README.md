@@ -41,9 +41,9 @@ State machine
   - ~~StateMachienDef arrange functions~~
   - ~~Contextless state~~
   - ~~Store event~~
-  - failure with error
-  - Errors and Exceptions
-  - Timestamp
+  - ~~failure with error~~
+  - ~~AlanException~~
+  - ~~Timestamp~~
   - Custom thread factory
   - Logging
   - TapeLogFactory

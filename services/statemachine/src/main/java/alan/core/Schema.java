@@ -17,8 +17,8 @@ public interface Schema<T extends alan.core.Tape> {
     return new StateContext(step, state, context);
   }
 
-  public static Tape Tape(ExecutionId id, int step, Status status, byte[] stateMachineContext) {
-    return new Tape(id, step, status, stateMachineContext);
+  public static Tape Tape(ExecutionId id, int step, Status status, byte[] stateMachineContext, long timestamp) {
+    return new Tape(id, step, status, stateMachineContext, timestamp);
   }
 
   /**
@@ -45,14 +45,16 @@ public interface Schema<T extends alan.core.Tape> {
     public final int step;
     public final Status status;
     public final byte[] stateMachineContext;
+    public final long timestamp;
 
     private final Map<String, Data<?>> row;
 
-    public Tape(ExecutionId id, int step, Status status, byte[] stateMachineContext) {
+    public Tape(ExecutionId id, int step, Status status, byte[] stateMachineContext, long timestamp) {
       this.id = id;
       this.step = step;
       this.status = status;
       this.stateMachineContext = stateMachineContext;
+      this.timestamp = timestamp;
       this.row = new HashMap<>();
     }
 

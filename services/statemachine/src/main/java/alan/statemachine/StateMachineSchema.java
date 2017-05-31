@@ -8,8 +8,16 @@ import alan.core.Schema;
 import static alan.statemachine.StateMachineTape.*;
 
 
+/**
+ * 
+ */
 public class StateMachineSchema implements Schema<StateMachineTape> {
 
+  /**
+   * [toSchemaTape description]
+   * @param  tape [description]
+   * @return      [description]
+   */
   public Schema.Tape toSchemaTape(StateMachineTape tape) {
     if (tape instanceof Start) {
       return Start.toSchemaTape((Start)tape);
@@ -21,11 +29,19 @@ public class StateMachineSchema implements Schema<StateMachineTape> {
       return Failure.toSchemaTape((Failure)tape);
     } else if (tape instanceof Success) {
       return Success.toSchemaTape((Success)tape);
-    } else return null; // throw error
+    } else {
+      throw new IllegalArgumentException("Unknown StateMachineTape=" + tape.getClass().getName());
+    }
   }
 
+  /**
+   * [tapeFromSchemaTape description]
+   * @param  tape [description]
+   * @return      [description]
+   */
   public StateMachineTape tapeFromSchemaTape(Schema.Tape tape) {
-    switch(String.class.cast(tape.get("tapeType").value)) {
+    String tapeType = String.class.cast(tape.get("tapeType").value);
+    switch(tapeType) {
       case "Start":
         return Start.fromSchemaTape(tape);
       case "Stage":
@@ -37,10 +53,15 @@ public class StateMachineSchema implements Schema<StateMachineTape> {
       case "Success":
         return Success.fromSchemaTape(tape);
       default:
-        return null;
+        throw new IllegalArgumentException("Unknown Schema.Tape.tapeType=" + tapeType);
     }
   }
 
+  /**
+   * [getSchemaStateContext description]
+   * @param  tape [description]
+   * @return      [description]
+   */
   public Set<Schema.StateContext> getSchemaStateContext(StateMachineTape tape) {
     Set<Schema.StateContext> contexts = new HashSet<>();
     if (tape instanceof Start) {

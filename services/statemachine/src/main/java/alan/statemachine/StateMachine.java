@@ -106,7 +106,8 @@ class StateMachine<S, SMC> implements Machine {
           tape = StateMachineTape.Start(id, 0,
                                         stateMachineDef.serializeStateMachineContext(stateMachineContext),
                                         stateMachineDef.nameFor(state),
-                                        stateMachineDef.serializeStateContext(stateContext));
+                                        stateMachineDef.serializeStateContext(stateContext),
+                                        System.currentTimeMillis());
           commands.add(Push(id, tape));
           return runUpdate(1, state, stateContext, stateMachineContext, event, commands);
         } else {
@@ -114,7 +115,8 @@ class StateMachine<S, SMC> implements Machine {
         }
       }, executor)
       .exceptionally((exception) -> {
-        exception.printStackTrace();
+        LOG.error("Caught exception while processing eventType={} for stateMachine={} and executionId={}",
+                   event.getClass().getName(), id.mname, id.uuid, exception);
         return Response.RETRY_TASK;
       });
   }
@@ -193,7 +195,9 @@ class StateMachine<S, SMC> implements Machine {
       Transition.Stop stop = (Transition.Stop)to;
       StateMachineTape tape = StateMachineTape.Stop(id, step, stateMachineContextBinary,
                                                     stop.exception.toString(),
-                                                    prevStateStr, prevStateContextBinary, prevTriggerEventType, prevTriggerEventBinary);
+                                                    prevStateStr, prevStateContextBinary,
+                                                    prevTriggerEventType, prevTriggerEventBinary,
+                                                    System.currentTimeMillis());
       commands.add(Push(id, tape));
       return tapeLog.execute(commands)
                     .thenApplyAsync((success) -> {
@@ -210,7 +214,8 @@ class StateMachine<S, SMC> implements Machine {
                                                              stateMachineDef.nameFor(goTo.state),
                                                              stateMachineDef.serializeSinkStateResult(result),
                                                              prevStateStr, prevStateContextBinary,
-                                                             prevTriggerEventType, prevTriggerEventBinary);
+                                                             prevTriggerEventType, prevTriggerEventBinary,
+                                                             System.currentTimeMillis());
             commands.add(Push(id, tape));
             return tapeLog.execute(commands)
                           .thenApplyAsync((success) -> {
@@ -225,7 +230,8 @@ class StateMachine<S, SMC> implements Machine {
                                                              stateMachineDef.nameFor(goTo.state),
                                                              stateMachineDef.serializeSinkStateResult(result),
                                                              prevStateStr, prevStateContextBinary,
-                                                             prevTriggerEventType, prevTriggerEventBinary);
+                                                             prevTriggerEventType, prevTriggerEventBinary,
+                                                             System.currentTimeMillis());
             commands.add(Push(id, tape));
             return tapeLog.execute(commands)
                           .thenApplyAsync((success) -> {
@@ -239,7 +245,9 @@ class StateMachine<S, SMC> implements Machine {
           byte[] contextOverride = stateMachineDef.serializeStateContext(goTo.contextOverride);
           StateMachineTape tape = StateMachineTape.Stage(id, step, stateMachineContextBinary,
                                                         toStateStr, contextOverride, ContextLabel.OVERRIDE,
-                                                        prevStateStr, prevStateContextBinary, prevTriggerEventType, prevTriggerEventBinary);
+                                                        prevStateStr, prevStateContextBinary,
+                                                        prevTriggerEventType, prevTriggerEventBinary,
+                                                        System.currentTimeMillis());
           commands.add(Push(id, tape));
           return tapeLog.execute(commands)
                         .thenApplyAsync((success) -> {
@@ -258,7 +266,8 @@ class StateMachine<S, SMC> implements Machine {
                           StateMachineTape tape = StateMachineTape.Stage(id, step, stateMachineContextBinary,
                                                                          toStateStr, stateContext, label,
                                                                          prevStateStr, prevStateContextBinary,
-                                                                         prevTriggerEventType, prevTriggerEventBinary);
+                                                                         prevTriggerEventType, prevTriggerEventBinary,
+                                                                         System.currentTimeMillis());
                           commands.add(Push(id, tape));
                           return tapeLog.execute(commands)
                                         .thenApplyAsync((success) -> {
@@ -277,7 +286,8 @@ class StateMachine<S, SMC> implements Machine {
                                                            stateMachineDef.nameFor(failTo.state),
                                                            stateMachineDef.serializeSinkStateResult(result),
                                                            prevStateStr, prevStateContextBinary,
-                                                           prevTriggerEventType, prevTriggerEventBinary);
+                                                           prevTriggerEventType, prevTriggerEventBinary,
+                                                           System.currentTimeMillis());
           commands.add(Push(id, tape));
           return tapeLog.execute(commands)
                         .thenApplyAsync((success) -> {

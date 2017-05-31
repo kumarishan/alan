@@ -14,8 +14,8 @@ import static alan.core.Tape.ContextLabel;
  */
 public abstract class StateMachineTape extends Tape {
 
-  public StateMachineTape(ExecutionId id, int step, Status status, byte[] stateMachineContext) {
-    super(id, step, status, stateMachineContext);
+  public StateMachineTape(ExecutionId id, int step, Status status, byte[] stateMachineContext, long timestamp) {
+    super(id, step, status, stateMachineContext, timestamp);
   }
 
   public abstract String getCurrentState();
@@ -24,33 +24,33 @@ public abstract class StateMachineTape extends Tape {
 
   ///////////////////////////////// Factory Methods ////////////////////////////////////////////////
 
-  public static Start Start(ExecutionId id, int step, byte[] stateMachineContext, String state, byte[] stateContext) {
-    return new Start(id, step, stateMachineContext, state, stateContext);
+  public static Start Start(ExecutionId id, int step, byte[] stateMachineContext, String state, byte[] stateContext, long timestamp) {
+    return new Start(id, step, stateMachineContext, state, stateContext, timestamp);
   }
 
   public static Stage Stage(ExecutionId id, int step, byte[] stateMachineContext,
                                         String currentState, byte[] currentStateContext, ContextLabel contextLabel,
                                         String prevState, byte[] prevStateContext,
-                                        String triggerEventType, byte[] triggerEvent) {
-    return new Stage(id, step, stateMachineContext, currentState, currentStateContext, contextLabel, prevState, prevStateContext, triggerEventType, triggerEvent);
+                                        String triggerEventType, byte[] triggerEvent, long timestamp) {
+    return new Stage(id, step, stateMachineContext, currentState, currentStateContext, contextLabel, prevState, prevStateContext, triggerEventType, triggerEvent, timestamp);
   }
 
   public static Stop Stop(ExecutionId id, int step, byte[] stateMachineContext,
                                       String exception, String state, byte[] stateContext,
-                                      String triggerEventType, byte[] triggerEvent) {
-    return new Stop(id, step, stateMachineContext, exception, state, stateContext, triggerEventType, triggerEvent);
+                                      String triggerEventType, byte[] triggerEvent, long timestamp) {
+    return new Stop(id, step, stateMachineContext, exception, state, stateContext, triggerEventType, triggerEvent, timestamp);
   }
 
   public static Failure Failure(ExecutionId id, int step, byte[] stateMachineContext,
                                          String state, byte[] result, String fromState, byte[] fromStateContext,
-                                         String triggerEventType, byte[] triggerEvent) {
-    return new Failure(id, step, stateMachineContext, state, result, fromState, fromStateContext, triggerEventType, triggerEvent);
+                                         String triggerEventType, byte[] triggerEvent, long timestamp) {
+    return new Failure(id, step, stateMachineContext, state, result, fromState, fromStateContext, triggerEventType, triggerEvent, timestamp);
   }
 
   public static Success Success(ExecutionId id, int step, byte[] stateMachineContext,
                                          String state, byte[] result, String fromState, byte[] fromStateContext,
-                                         String triggerEventType, byte[] triggerEvent) {
-    return new Success(id, step, stateMachineContext, state, result, fromState, fromStateContext, triggerEventType, triggerEvent);
+                                         String triggerEventType, byte[] triggerEvent, long timestamp) {
+    return new Success(id, step, stateMachineContext, state, result, fromState, fromStateContext, triggerEventType, triggerEvent, timestamp);
   }
 
   //////////////////////////////////// Tapes /////////////////////////////////////
@@ -62,8 +62,8 @@ public abstract class StateMachineTape extends Tape {
     public String state;
     public byte[] stateContext;
 
-    public Start(ExecutionId id, int step, byte[] stateMachineContext, String state, byte[] stateContext) {
-      super(id, step, NEW, stateMachineContext);
+    public Start(ExecutionId id, int step, byte[] stateMachineContext, String state, byte[] stateContext, long timestamp) {
+      super(id, step, NEW, stateMachineContext, timestamp);
       this.state = state;
       this.stateContext = stateContext;
     }
@@ -77,7 +77,7 @@ public abstract class StateMachineTape extends Tape {
     }
 
     public static Schema.Tape toSchemaTape(Start start) {
-      Schema.Tape row = new Schema.Tape(start.id, start.step, start.status, start.stateMachineContext);
+      Schema.Tape row = new Schema.Tape(start.id, start.step, start.status, start.stateMachineContext, start.timestamp);
       row.put("tapeType", String.class, "Start");
       row.put("state", String.class, start.state);
       row.put("stateContext", byte[].class, start.stateContext);
@@ -90,7 +90,8 @@ public abstract class StateMachineTape extends Tape {
         row.step,
         row.stateMachineContext,
         String.class.cast(row.get("state")),
-        byte[].class.cast(row.get("stateContext"))
+        byte[].class.cast(row.get("stateContext")),
+        row.timestamp
       );
     }
   }
@@ -110,8 +111,8 @@ public abstract class StateMachineTape extends Tape {
     public Stage(ExecutionId id, int step, byte[] stateMachineContext,
                       String currentState, byte[] currentStateContext, ContextLabel contextLabel,
                       String prevState, byte[] prevStateContext,
-                      String triggerEventType, byte[] triggerEvent) {
-      super(id, step, LIVE, stateMachineContext);
+                      String triggerEventType, byte[] triggerEvent, long timestamp) {
+      super(id, step, LIVE, stateMachineContext, timestamp);
       this.currentState = currentState;
       this.currentStateContext = currentStateContext;
       this.contextLabel = contextLabel;
@@ -130,7 +131,7 @@ public abstract class StateMachineTape extends Tape {
     }
 
     public static Schema.Tape toSchemaTape(Stage stage) {
-      Schema.Tape row = new Schema.Tape(stage.id, stage.step, stage.status, stage.stateMachineContext);
+      Schema.Tape row = new Schema.Tape(stage.id, stage.step, stage.status, stage.stateMachineContext, stage.timestamp);
       row.put("tapeType", String.class, "Stage");
       row.put("currentState", String.class, stage.currentState);
       row.put("currentStateContext", byte[].class, stage.currentStateContext);
@@ -153,7 +154,8 @@ public abstract class StateMachineTape extends Tape {
         String.class.cast(row.get("prevState").value),
         byte[].class.cast(row.get("prevStateContext").value),
         String.class.cast(row.get("triggerEventType").value),
-        byte[].class.cast(row.get("triggerEvent").value)
+        byte[].class.cast(row.get("triggerEvent").value),
+        row.timestamp
       );
     }
   }
@@ -170,8 +172,8 @@ public abstract class StateMachineTape extends Tape {
 
     public Stop(ExecutionId id, int step, byte[] stateMachineContext,
                 String exception, String state, byte[] stateContext,
-                String triggerEventType, byte[] triggerEvent) {
-      super(id, step, STOPPED, stateMachineContext);
+                String triggerEventType, byte[] triggerEvent, long timestamp) {
+      super(id, step, STOPPED, stateMachineContext, timestamp);
       this.exception = exception;
       this.state = state;
       this.stateContext = stateContext;
@@ -188,7 +190,7 @@ public abstract class StateMachineTape extends Tape {
     }
 
     public static Schema.Tape toSchemaTape(Stop stop) {
-      Schema.Tape row = new Schema.Tape(stop.id, stop.step, stop.status, stop.stateMachineContext);
+      Schema.Tape row = new Schema.Tape(stop.id, stop.step, stop.status, stop.stateMachineContext, stop.timestamp);
       row.put("tapeType", String.class, "Stop");
       row.put("exception", String.class, stop.exception);
       row.put("state", String.class, stop.state);
@@ -207,7 +209,8 @@ public abstract class StateMachineTape extends Tape {
         String.class.cast(row.get("state").value),
         byte[].class.cast(row.get("stateContext").value),
         String.class.cast(row.get("triggerEventType").value),
-        byte[].class.cast(row.get("triggerEvent").value)
+        byte[].class.cast(row.get("triggerEvent").value),
+        row.timestamp
       );
     }
   }
@@ -225,8 +228,8 @@ public abstract class StateMachineTape extends Tape {
 
     public Failure(ExecutionId id, int step, byte[] stateMachineContext,
                    String state, byte[] result, String fromState, byte[] fromStateContext,
-                   String triggerEventType, byte[] triggerEvent) {
-      super(id, step, FAILED, stateMachineContext);
+                   String triggerEventType, byte[] triggerEvent, long timestamp) {
+      super(id, step, FAILED, stateMachineContext, timestamp);
       this.state = state;
       this.result = result;
       this.fromState = fromState;
@@ -244,7 +247,7 @@ public abstract class StateMachineTape extends Tape {
     }
 
     public static Schema.Tape toSchemaTape(Failure failure) {
-      Schema.Tape row = new Schema.Tape(failure.id, failure.step, failure.status, failure.stateMachineContext);
+      Schema.Tape row = new Schema.Tape(failure.id, failure.step, failure.status, failure.stateMachineContext, failure.timestamp);
       row.put("tapeType", String.class, "Failure");
       row.put("state", String.class, failure.state);
       row.put("result", byte[].class, failure.result);
@@ -265,7 +268,8 @@ public abstract class StateMachineTape extends Tape {
         String.class.cast(row.get("fromState").value),
         byte[].class.cast(row.get("fromStateContext").value),
         String.class.cast(row.get("triggerEventType").value),
-        byte[].class.cast(row.get("triggerEvent").value)
+        byte[].class.cast(row.get("triggerEvent").value),
+        row.timestamp
       );
     }
   }
@@ -283,8 +287,8 @@ public abstract class StateMachineTape extends Tape {
 
     public Success(ExecutionId id, int step, byte[] stateMachineContext,
                    String state, byte[] result, String fromState, byte[] fromStateContext,
-                   String triggerEventType, byte[] triggerEvent) {
-      super(id, step, SUCCEEDED, stateMachineContext);
+                   String triggerEventType, byte[] triggerEvent, long timestamp) {
+      super(id, step, SUCCEEDED, stateMachineContext, timestamp);
       this.state = state;
       this.result = result;
       this.fromState = fromState;
@@ -302,7 +306,7 @@ public abstract class StateMachineTape extends Tape {
     }
 
     public static Schema.Tape toSchemaTape(Success success) {
-      Schema.Tape row = new Schema.Tape(success.id, success.step, success.status, success.stateMachineContext);
+      Schema.Tape row = new Schema.Tape(success.id, success.step, success.status, success.stateMachineContext, success.timestamp);
       row.put("tapeType", String.class, "Success");
       row.put("state", String.class, success.state);
       row.put("result", byte[].class, success.result);
@@ -323,7 +327,8 @@ public abstract class StateMachineTape extends Tape {
         String.class.cast(row.get("fromState").value),
         byte[].class.cast(row.get("fromStateContext").value),
         String.class.cast(row.get("triggerEventType").value),
-        byte[].class.cast(row.get("triggerEvent").value)
+        byte[].class.cast(row.get("triggerEvent").value),
+        row.timestamp
       );
     }
   }
