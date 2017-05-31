@@ -1,5 +1,7 @@
 package alan;
 
+import java.util.Set;
+import java.util.HashSet;
 import java.util.Random;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -7,6 +9,9 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import akka.actor.Props;
+import akka.actor.ActorRef;
+import akka.actor.ActorSystem;
 
 import alan.core.Alan;
 import alan.core.AlanConfig;
@@ -17,10 +22,13 @@ import alan.core.Tape;
 import alan.statemachine.StateMachineSchema;
 import alan.statemachine.StateMachineTape;
 import alan.statemachine.StateMachineDef;
+import alan.akka.AlanAkka;
+import alan.akka.AkkaMachineConf;
 
 import static alan.Turnstile.TurnstileState.*;
 import static alan.Turnstile.TurnstileState;
 import static alan.Turnstile.*;
+
 
 /**
  *
@@ -247,12 +255,31 @@ public class Main {
     Random random = new Random(10);
     ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(1);
 
+    Object[] erun = new Object[20];
+    for (int i = 0; i < 20; i++) {
+      erun[i] = events[random.nextInt(4)];
+    }
+
     int delay = 0;
     int period = 1000;
     for (int i = 0; i < 20; i++) {
-      scheduler.schedule(() -> {
-        alan.send(events[random.nextInt(4)]);
-      }, delay, TimeUnit.MILLISECONDS);
+      Object event = erun[i];
+      scheduler.schedule(() -> alan.send(event), delay, TimeUnit.MILLISECONDS);
+      delay += period;
+    }
+
+    final ActorSystem system = ActorSystem.create("alan-actor-test");
+    Set<AkkaMachineConf> confs = new HashSet<>();
+    confs.add(AkkaMachineConf.create(fsm)
+                             .withParallelism(1)
+                             .withTapeLogFactory(InMemoryTapeLog.factory));
+
+    ActorRef alanAkka = system.actorOf(Props.create(AlanAkka.class, confs), "alan-akka");
+    delay = 0;
+    for (int i = 0; i < 20; i++) {
+      Object event = erun[i];
+      // machineActor.tell(event, null); // Fix Error: Lock already held
+      scheduler.schedule(() -> alanAkka.tell(event, null), delay, TimeUnit.MILLISECONDS);
       delay += period;
     }
 
