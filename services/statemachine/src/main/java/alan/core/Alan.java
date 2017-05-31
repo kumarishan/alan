@@ -1,6 +1,5 @@
-package alan.statemachine;
+package alan.core;
 
-import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ExecutorService;
 
@@ -32,8 +31,8 @@ public class Alan {
    * @param  parallelism     [description]
    * @return                 [description]
    */
-  public <S, SMC> void add(StateMachineDef<S, SMC> stateMachineDef, int parallelism) {
-    StateMachineExecutor<S, SMC> executor = new StateMachineExecutor<>(stateMachineDef, parallelism, 10, 10000);
+  public <S, SMC, T extends Tape> void add(MachineDef<S, SMC, T> machineDef, TapeLog.Factory tapeLogFactory, int parallelism) {
+    MachineExecutor<S, SMC, T> executor = new MachineExecutor<>(machineDef, tapeLogFactory, parallelism, 10, 10000);
     dispatcher.register(executor);
   }
 
@@ -41,8 +40,8 @@ public class Alan {
    * [add description]
    * @param stateMachine [description]
    */
-  public void add(StateMachineDef<?, ?> stateMachine) {
-    add(stateMachine, 1);
+  public <T extends Tape> void add(MachineDef<?, ?, T> machineDef, TapeLog.Factory tapeLogFactory) {
+    add(machineDef, tapeLogFactory, 1);
   }
 
   /**
@@ -62,12 +61,4 @@ public class Alan {
    * [terminate description]
    */
   void terminate() {}
-}
-
-// TODO
-class Seed {}
-class AlanConfig {
-  String host;
-  int port;
-  List<Seed> seeds;
 }

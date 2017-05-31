@@ -1,14 +1,15 @@
 apply plugin: 'application'
-mainClassName = 'alan.statemachine.Main'
+mainClassName = 'alan.Main'
 
 compileJava {
-  options.compilerArgs << '-Xlint:unchecked'
+  options.compilerArgs << '-Xlint:unchecked' << '-Xdiags:verbose'
 }
 
 dependencies {
   compile 'joda-time:joda-time:2.9.5'
   compile 'org.slf4j:slf4j-api:1.7.+'
   compile 'org.slf4j:slf4j-simple:1.7.+'
+  compile 'com.esotericsoftware:kryo:4.0.0'
 }
 
 task local {

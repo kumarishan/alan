@@ -1,4 +1,4 @@
-package alan.statemachine;
+package alan.core;
 
 import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
@@ -15,6 +15,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import alan.util.Unsafe;
+
+import static alan.core.Machine.Response;
+import static alan.core.Machine.Response.*;
+
 
 /**
  *
@@ -27,22 +32,17 @@ class ExecutionException extends Exception {
 }
 
 /**
- *
- */
-interface ExecutionId {};
-
-/**
  * State Machine executor
  * @ThreadSafe
  */
-public class StateMachineExecutor<S, SMC> {
+public class MachineExecutor<S, SMC, T extends Tape> {
 
-  private final Logger logger = LoggerFactory.getLogger(this.getClass());
+  private static final Logger LOG = LoggerFactory.getLogger(MachineExecutor.class);
 
   private volatile int status = 0;
   private final LinkedBlockingQueue<ExecutionTask> taskQueue;
 
-  private final StateMachineDef<S, SMC> stateMachineDef;
+  private final MachineDef<S, SMC, T> machineDef;
   private int eventRetries = 3;
   private int maxWaitForAction;
 
@@ -51,55 +51,46 @@ public class StateMachineExecutor<S, SMC> {
   private final ScheduledThreadPoolExecutor scheduler;
 
   // executor service used by state machine internally if any
-  protected final ExecutorService stateMachineExecutorService;
+  protected final ExecutorService exectorService;
 
-  private final ExecutionPersistance<S, SMC> persistance;
-
-  private final ConcurrentMap<ExecutionId, ExecutionLock> locks;
-  {
-    locks = new ConcurrentHashMap<>();
-  }
+  private TapeLog<T> tapeLog;
 
   /**
-   * [StateMachineExecutor description]
-   * @param  stateMachineDef  [description]
+   * [MachineExecutor description]
+   * @param  machineDef  [description]
    * @param  parallelism      [description]
    * @param  failureThreshold [description]
    * @return                  [description]
    */
-  public StateMachineExecutor(StateMachineDef<S, SMC> stateMachineDef, int parallelism, int failureThreshold, int maxWaitForAction) {
+  public MachineExecutor(MachineDef<S, SMC, T> machineDef,
+                         TapeLog.Factory tapeLogFactory,
+                         int parallelism,
+                         int failureThreshold,
+                         int maxWaitForAction) {
     if (parallelism <= 0 || parallelism > MAX_PARALLEL ||
         failureThreshold <= 0 || failureThreshold > MAX_FAILURE_THRESHOLD)
       throw new IllegalArgumentException();
 
     this.maxWaitForAction = maxWaitForAction;
-    this.stateMachineDef = stateMachineDef;
-    this.stateMachineExecutorService = stateMachineDef.createExecutorService();
+    this.machineDef = machineDef;
+    this.exectorService = machineDef.createExecutorService();
     this.taskQueue = new LinkedBlockingQueue<>();
     this.forkJoinPool = new ForkJoinPool(parallelism * ASYNC_TASK_PER_EXECUTION,
                                         ForkJoinPool. defaultForkJoinWorkerThreadFactory,
                                         (t, e) -> {}, // TODO
                                         true); // true -> FIFO
+    this.tapeLog = tapeLogFactory.create(machineDef.getSchema(), forkJoinPool);
     this.scheduler = new ScheduledThreadPoolExecutor(parallelism); // [TODO]
     this.status = ((-parallelism) & EC_MASK) | (((-failureThreshold) << FC_SHIFT) & FC_MASK);
-    this.persistance = new InMemoryExecutionPersistance<>(stateMachineDef, this.forkJoinPool);
   }
 
   /**
-   * [StateMachineExecutor description]
-   * @param  stateMachineDef [description]
+   * [MachineExecutor description]
+   * @param  machineDef [description]
    * @return                 [description]
    */
-  public StateMachineExecutor(StateMachineDef<S, SMC> stateMachineDef) {
-    this(stateMachineDef, Math.min(MAX_PARALLEL, Runtime.getRuntime().availableProcessors()), 10, 60000);
-  }
-
-  /**
-   * [getPersistance description]
-   * @return [description]
-   */
-  public ExecutionPersistance<S, SMC> getPersistance() {
-    return persistance;
+  public MachineExecutor(MachineDef<S, SMC, T> machineDef, TapeLog.Factory tapeLogFactory) {
+    this(machineDef, tapeLogFactory, Math.min(MAX_PARALLEL, Runtime.getRuntime().availableProcessors()), 10, 60000);
   }
 
   /**
@@ -107,14 +98,14 @@ public class StateMachineExecutor<S, SMC> {
    * @return [description]
    */
   public final String getStateMachineId() {
-    return stateMachineDef.getId();
+    return machineDef.getName();
   }
 
   /**
    *
    */
   public final Set<Class<?>> getEventTypes() {
-    return stateMachineDef.getEventTypes();
+    return machineDef.getEventTypes();
   }
 
   /**
@@ -154,17 +145,17 @@ public class StateMachineExecutor<S, SMC> {
    * [watch description]
    * @param future [description]
    */
-  private void watch(CompletableFuture<ExecutionResult> future) {
+  private void watch(CompletableFuture<Response> future) {
     scheduler.schedule(new Runnable() {
       public void run() {
         if (!future.isDone()) {
-          future.complete(ExecutionResult.FAILED_ACTION_TIMEOUT);
+          future.complete(Response.FAILED_ACTION_TIMEOUT);
         }
       }
     }, this.maxWaitForAction, TimeUnit.MILLISECONDS);
   }
 
-  ///////////////////////////// Event Execution Methods ///////////////////////////////////////////
+  ///////////////////////////// Event ExeLOGcution Methods ///////////////////////////////////////////
 
   /**
    * [newAction description]
@@ -183,8 +174,9 @@ public class StateMachineExecutor<S, SMC> {
    *               or is suspended or terminated
    */
   public final boolean receive(Object event) {
-    ExecutionId id = stateMachineDef.getExecutionId(event);
-    ExecutionTask task = new ExecutionTask(event, id, eventRetries);
+    ExecutionId id = machineDef.getExecutionId(event);
+    Machine machine = machineDef.createMachine(id, tapeLog, forkJoinPool);
+    ExecutionTask task = new ExecutionTask(id, machine, event, eventRetries);
     return receive(task);
   }
 
@@ -244,21 +236,6 @@ public class StateMachineExecutor<S, SMC> {
     }
   }
 
-  /**
-   * [getLock description]
-   * @param  id [description]
-   * @return    [description]
-   */
-  private final ExecutionLock getLock(ExecutionId id) {
-    ExecutionLock lock = locks.get(id);
-    if (lock == null) {
-      lock = new InMemoryExecutionLock(id);
-      ExecutionLock old = locks.putIfAbsent(id, lock);
-      if (old != null) lock = old;
-    }
-    return lock;
-  }
-
   ////////////////////////////// Status Methods ////////////////////////////////////////////
 
   /**
@@ -292,7 +269,7 @@ public class StateMachineExecutor<S, SMC> {
   private static long STATUS_OFFSET;
   static {
     try {
-      STATUS_OFFSET = Unsafe.instance.objectFieldOffset(StateMachineExecutor.class.getDeclaredField("status"));
+      STATUS_OFFSET = Unsafe.instance.objectFieldOffset(MachineExecutor.class.getDeclaredField("status"));
     } catch (Throwable t) {
       throw new ExceptionInInitializerError(t);
     }
@@ -341,13 +318,15 @@ public class StateMachineExecutor<S, SMC> {
    *
    */
   public static class ExecutionTask {
-    public final Object event;
     public final ExecutionId id;
+    public final Machine machine;
+    public final Object event;
     public final int retries;
 
-    public ExecutionTask(Object event, ExecutionId id, int retries) {
-      this.event = event;
+    public ExecutionTask(ExecutionId id, Machine machine, Object event, int retries) {
       this.id = id;
+      this.machine = machine;
+      this.event = event;
       this.retries = retries;
     }
 
@@ -356,24 +335,8 @@ public class StateMachineExecutor<S, SMC> {
      * @return [description]
      */
     public ExecutionTask decrement() {
-      return new ExecutionTask(event, id, retries - 1);
+      return new ExecutionTask(id, machine, event, retries - 1);
     }
-  }
-
-  /**
-   *
-   */
-  private static enum ExecutionResult {
-    SUCCESS,
-    RETRY_TASK,
-    FAILED,
-    FAILED_TO_PERSIST_NEXT_STAGE,
-    FAILED_INCONSISTENT_LOCK,
-    FAILED_ACTION_TIMEOUT,
-    FAILED_UNHANDLED_EVENT,
-    FAILED_ALREADY_COMPLETE,
-    FAILED_TO_START,
-    FAILED_INVALID_TRANSITION;
   }
 
   /**
@@ -408,17 +371,13 @@ public class StateMachineExecutor<S, SMC> {
    * - A ForkJoinTask that gets a State object and the context and runs it by calling the action
    */
   protected static class StateExecutionAction<S, SMC> extends RecursiveAction {
-    private final StateMachineExecutor<S, SMC> executor;
-    private final ExecutionPersistance<S, SMC> persistance;
-    private final StateMachineDef<S, SMC> stateMachineDef;
+    private final MachineExecutor<S, SMC, ?> executor;
     private final ForkJoinPool es;
 
-    Logger logger = LoggerFactory.getLogger(this.getClass());
+    private static final Logger LOG = LoggerFactory.getLogger(StateExecutionAction.class);
 
-    public StateExecutionAction(StateMachineExecutor<S, SMC> executor) {
+    public StateExecutionAction(MachineExecutor<S, SMC, ?> executor) {
       this.executor = executor;
-      this.persistance = executor.getPersistance();
-      this.stateMachineDef = executor.stateMachineDef;
       this.es = executor.forkJoinPool;
     }
 
@@ -429,125 +388,36 @@ public class StateMachineExecutor<S, SMC> {
         return;
       }
 
-      ExecutionLock lock = executor.getLock(task.id);
+      CompletableFuture<Response> runF = task.machine.run(task.event);
 
-      CompletableFuture<ExecutionResult> mainF =
-        lock.acquire().thenComposeAsync((locked) -> {
-            if (locked) {
-              return persistance.getExecutionProgress(task.id)
-                .thenComposeAsync((progress) -> {
-                  if (progress.isNew()) {
-                    S startState = stateMachineDef.getStartState();
-                    StateMachineDef.Context<S, ?, SMC> context = stateMachineDef.getStartContext();
-                    return persistance.updateExecution(
-                        new NewExecutionUpdate<>(task.id, startState, context.getStateContext(), context.getStateMachineContext()))
-                      .thenComposeAsync((success) -> {
-                        if (!success) return CompletableFuture.completedFuture(ExecutionResult.FAILED_TO_START);
-                        else return getAndRunExecutionStage(task, lock);
-                      }, es);
-                  } else if (progress.isLive()) {
-                    return getAndRunExecutionStage(task, lock);
-                  } else
-                    return tryReleaseLock(ExecutionResult.FAILED_ALREADY_COMPLETE, lock);
-                }, es);
-            } else {
-              return CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
-            }
-          }, es);
+      executor.watch(runF);
 
-      // Handle Execution Failures and success
-      mainF.thenAcceptAsync((success) -> {
-        logger.debug("Task {} ended with {}", task.id, success);
-        switch (success) {
-          case SUCCESS: break; // TODO
-          case RETRY_TASK:
-            executor.receive(task.decrement());
-            break;
-          case FAILED_TO_PERSIST_NEXT_STAGE: break; // TODO
-          case FAILED_INCONSISTENT_LOCK: break; // TODO
-          case FAILED_ACTION_TIMEOUT: break;
-          case FAILED_UNHANDLED_EVENT:
-            // send to deadletter queue
-            break;
-          case FAILED_ALREADY_COMPLETE: break;
-          case FAILED_TO_START: break;
-          case FAILED_INVALID_TRANSITION: break;
-          case FAILED: break;
-        }
-
-        executor.tryRunExecution(new StateExecutionAction<>(executor));
-      }, es);
-
-      mainF.exceptionally((exception) -> {
-        exception.printStackTrace();
-        return ExecutionResult.FAILED;
-      });
-
-      executor.watch(mainF);
-    }
-
-    /**
-     * [getAndRunExecutionStage description]
-     * @param  task [description]
-     * @param  lock [description]
-     * @return      [description]
-     */
-    private CompletableFuture<ExecutionResult> getAndRunExecutionStage(ExecutionTask task, ExecutionLock lock) {
-      return persistance.getExecutionStage(task.id)
-        .thenComposeAsync((stage) -> {
-          CompletableFuture<ExecutionResult> resultF;
-          if (stage != null)
-            resultF = runAndPersistExecutionStage(stage, task);
-          else
-            resultF = CompletableFuture.completedFuture(ExecutionResult.RETRY_TASK);
-
-          return resultF.thenComposeAsync((result) -> tryReleaseLock(result, lock), es);
-        }, es);
-    }
-
-    /**
-     * [runAndPersistExecutionStage description]
-     * @param  stage [description]
-     * @param  task  [description]
-     * @return       [description]
-     */
-    private CompletableFuture<ExecutionResult> runAndPersistExecutionStage(ExecutionStage<S, ?, SMC> stage, ExecutionTask task) {
-      return stage.run(task.event, executor.stateMachineExecutorService)
-        .thenComposeAsync((update) ->
-          persistance.updateExecution(update)
-                  .thenApplyAsync((success) -> {
-                    if (success)
-                      return ExecutionResult.SUCCESS;
-                    else
-                      return ExecutionResult.FAILED_TO_PERSIST_NEXT_STAGE;
-                  }, es)
-          , es)
-      .exceptionally((exception) -> {
-        if (exception.getCause() instanceof UnhandledEventException)
-          return ExecutionResult.FAILED_UNHANDLED_EVENT;
-        else if (exception.getCause() instanceof InvalidStateTransitionException)
-          return ExecutionResult.FAILED_INVALID_TRANSITION;
-        else {
+      runF
+        .exceptionally((exception) -> {
           exception.printStackTrace();
-          return ExecutionResult.FAILED;
-        }
-      });
-    }
+          return FAILED;
+        })
+        .thenAcceptAsync((response) -> {
+          switch (response) {
+            case SUCCESS: break; // TODO
+            case RETRY_TASK:
+              executor.receive(task.decrement());
+              break;
+            case FAILED_TO_PERSIST_NEXT_STAGE: break; // TODO
+            case FAILED_INCONSISTENT_LOCK: break; // TODO
+            case FAILED_ACTION_TIMEOUT: break;
+            case FAILED_UNHANDLED_EVENT:
+              // send to deadletter queue
+              break;
+            case FAILED_ALREADY_COMPLETE: break;
+            case FAILED_TO_START: break;
+            case FAILED_INVALID_TRANSITION: break;
+            case FAILED: break;
+          }
 
-    /**
-     * [tryReleaseLock description]
-     * @param  result [description]
-     * @param  lock   [description]
-     * @return        [description]
-     */
-    private CompletableFuture<ExecutionResult> tryReleaseLock(ExecutionResult result, ExecutionLock lock) {
-      return lock.release()
-        .thenApplyAsync((released) -> {
-          if (!released) // if still locked
-            return ExecutionResult.FAILED_INCONSISTENT_LOCK;
-          else
-            return result;
+          executor.tryRunExecution(new StateExecutionAction<>(executor));
         }, es);
     }
   }
+
 }
