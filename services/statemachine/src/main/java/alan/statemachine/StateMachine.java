@@ -3,7 +3,7 @@ package alan.statemachine;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 
 import alan.core.ExecutionId;
 import alan.core.Machine;
@@ -30,7 +30,7 @@ class StateMachine<S, SMC> implements Machine {
 
   private final ExecutionId id;
   private final StateMachineDef<S, SMC> stateMachineDef;
-  private final ExecutorService executor;
+  private final Executor executor;
   private final TapeLog<StateMachineTape> tapeLog;
 
   /**
@@ -40,7 +40,7 @@ class StateMachine<S, SMC> implements Machine {
    * @param  executor        [description]
    * @return                 [description]
    */
-  public StateMachine(ExecutionId id, StateMachineDef<S, SMC> stateMachineDef, TapeLog<StateMachineTape> tapeLog, ExecutorService executor) {
+  public StateMachine(ExecutionId id, StateMachineDef<S, SMC> stateMachineDef, TapeLog<StateMachineTape> tapeLog, Executor executor) {
     this.id = id;
     this.stateMachineDef = stateMachineDef;
     this.executor = executor;

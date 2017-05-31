@@ -104,7 +104,7 @@ class Turnstile extends StateMachineDef<Turnstile.TurnstileState, TurnstileConte
     // to use executor service inside action for async computation
     // the created service is accessible as context.executorService
     // the service is created only once
-    executorServiceFactory(() -> new ForkJoinPool());
+    executorFactory(() -> new ForkJoinPool());
 
     // State definitions
     // - statename, preferrable enum, string or an immutable singletons

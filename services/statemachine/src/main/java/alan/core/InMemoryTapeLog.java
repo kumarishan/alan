@@ -1,7 +1,7 @@
 package alan.core;
 
 import java.util.Collection;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -33,7 +33,7 @@ public class InMemoryTapeLog<T extends Tape> implements TapeLog<T> {
   ////////////////////////////// Factory /////////////////////////////
 
   private static class Factory implements TapeLog.Factory {
-    public <T extends Tape> TapeLog<T> create(Schema<T> schema, ExecutorService service) {
+    public <T extends Tape> TapeLog<T> create(Schema<T> schema, Executor service) {
       return new InMemoryTapeLog<>(schema, service);
     }
   }
@@ -42,7 +42,7 @@ public class InMemoryTapeLog<T extends Tape> implements TapeLog<T> {
 
   ////////////////////////////////////////////////////////////////////
 
-  private final ExecutorService executor;
+  private final Executor executor;
   private final Schema<T> schema;
   private final ConcurrentMap<ExecutionId, ExecutionLock> locks; // [TODO] cache
   private final ConcurrentMap<ExecutionId, TreeMap<Integer, Schema.Tape>> tapes;
@@ -53,7 +53,7 @@ public class InMemoryTapeLog<T extends Tape> implements TapeLog<T> {
     stateContexts = new ConcurrentHashMap<>();
   }
 
-  public InMemoryTapeLog(Schema<T> schema, ExecutorService executor) {
+  public InMemoryTapeLog(Schema<T> schema, Executor executor) {
     this.schema = schema;
     this.executor = executor;
   }

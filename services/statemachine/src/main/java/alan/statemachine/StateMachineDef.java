@@ -1,7 +1,7 @@
 package alan.statemachine;
 
 import java.util.*;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.io.Serializable;
 import java.util.function.Supplier;
@@ -28,7 +28,7 @@ import alan.util.FI.TriFunction;
  * Sate Machine
  * @Immutable
  */
-public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, StateMachineTape> {
+public class StateMachineDef<S, SMC> implements MachineDef<S, SMC, StateMachineTape> {
   private static Schema<StateMachineTape> schema = new StateMachineSchema();
 
   protected class State<SC> extends StateDef<S, SC, SMC> {
@@ -45,7 +45,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
   private S startState;
   private RuntimeExceptionHandler<S, SMC> runtimeExceptionHandler;
   private Supplier<SMC> stateMachineContextFactory;
-  private Supplier<ExecutorService> executorServiceFactory;
+  private Supplier<Executor> executorFactory;
   private Class<SMC> stateMachineContextType;
 
   private final Kryo kryo;
@@ -62,7 +62,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
 
     // defaults
     // default serde using jackson...
-    executorServiceFactory = () -> ForkJoinPool.commonPool();
+    executorFactory = () -> ForkJoinPool.commonPool();
     runtimeExceptionHandler = (S state, Object event, StateActionContext<S, ?, SMC> context, Throwable exception) -> stop(exception);
   }
 
@@ -111,10 +111,10 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * Creates a new StateMachine instance for this definition and with the given Execution Id and Tape Log.
    * @param  id       the Execution Id
    * @param  tapeLog  the Tape Log for StateMachineTape
-   * @param  executor the ExecutorService
+   * @param  executor the Executor
    * @return          A new StateMachine instance for this definition and with the given Execution Id and Tape Log
    */
-  public Machine createMachine(ExecutionId id, TapeLog<StateMachineTape> tapeLog, ExecutorService executor) {
+  public Machine createMachine(ExecutionId id, TapeLog<StateMachineTape> tapeLog, Executor executor) {
     return new StateMachine<S, SMC>(id, this, tapeLog, executor);
   }
 
@@ -122,8 +122,8 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * Returns a new instance of configured executor service.
    * @return a new instance of configured executor service
    */
-  public ExecutorService createExecutorService() {
-    return this.executorServiceFactory.get();
+  public Executor createExecutor() {
+    return this.executorFactory.get();
   }
 
     /**
@@ -421,11 +421,11 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
   }
 
   /**
-   * [executorServiceFactory description]
+   * [executorFactory description]
    * @param factory [description]
    */
-  protected void executorServiceFactory(Supplier<ExecutorService> factory) {
-    this.executorServiceFactory = factory;
+  protected void executorFactory(Supplier<Executor> factory) {
+    this.executorFactory = factory;
   }
 
   /**
@@ -501,7 +501,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @param  handler    [description]
    * @return            [description]
    */
-  protected <R> void successAsync(S state, Class<R> resultType, BiFunction<SMC, ExecutorService, CompletableFuture<R>> action) {
+  protected <R> void successAsync(S state, Class<R> resultType, BiFunction<SMC, Executor, CompletableFuture<R>> action) {
     if (sinkStates.containsKey(state) || states.containsKey(state))
       throw new IllegalArgumentException("State " + state + " is already defined, cannot use as new success state");
     addToNameToState(state);
@@ -529,7 +529,7 @@ public abstract class StateMachineDef<S, SMC> implements MachineDef<S, SMC, Stat
    * @param  handler    [description]
    * @return            [description]
    */
-  protected <R> void failureAsync(S state, Class<R> resultType, TriFunction<SMC, Throwable, ExecutorService, CompletableFuture<R>> action) {
+  protected <R> void failureAsync(S state, Class<R> resultType, TriFunction<SMC, Throwable, Executor, CompletableFuture<R>> action) {
     if (states.containsKey(state))
       throw new IllegalArgumentException("State " + state + " is already defined, cannot use as new failure state");
     addToNameToState(state);
