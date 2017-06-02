@@ -12,6 +12,8 @@ import org.slf4j.LoggerFactory;
 import akka.actor.Props;
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 import alan.core.Alan;
 import alan.core.AlanConfig;
@@ -238,13 +240,12 @@ public class Main {
   private static volatile int count = 0;
 
   public static void main(String[] args) {
-
-    AlanConfig config = new AlanConfig();
-    Alan alan = new Alan(config);
-
     Turnstile fsm = new Turnstile();
-    alan.add(fsm, InMemoryTapeLog.factory, 4);
-    alan.start();
+
+    // AlanConfig config = new AlanConfig();
+    // Alan alan = new Alan(config);
+    // alan.add(fsm, InMemoryTapeLog.factory, 4);
+    // alan.start();
 
     EventOne one1 = new EventOne("t-1", 1);
     EventOne one2 = new EventOne("t-1", 2);
@@ -262,13 +263,14 @@ public class Main {
 
     int delay = 0;
     int period = 1000;
-    for (int i = 0; i < 20; i++) {
-      Object event = erun[i];
-      scheduler.schedule(() -> alan.send(event), delay, TimeUnit.MILLISECONDS);
-      delay += period;
-    }
+    // for (int i = 0; i < 20; i++) {
+    //   Object event = erun[i];
+    //   scheduler.schedule(() -> alan.send(event), delay, TimeUnit.MILLISECONDS);
+    //   delay += period;
+    // }
 
-    final ActorSystem system = ActorSystem.create("alan-actor-test");
+    Config actorConfig = ConfigFactory.load("alan");
+    final ActorSystem system = ActorSystem.create("alan-test", actorConfig);
     Set<AkkaMachineConf> confs = new HashSet<>();
     confs.add(AkkaMachineConf.create(fsm)
                              .withParallelism(1)

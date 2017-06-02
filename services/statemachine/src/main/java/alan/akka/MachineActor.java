@@ -24,6 +24,7 @@ public class MachineActor<S, SMC, T extends Tape> extends AbstractActor {
   public MachineActor(MachineDef<S, SMC, T> machineDef, TapeLog.Factory tapeLogFactory) {
     this.machineDef = machineDef;
     this.tapeLog = tapeLogFactory.create(machineDef.getSchema(), getContext().dispatcher());
+    System.out.println("Hello......" + getSelf().path());
   }
 
   @Override
