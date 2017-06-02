@@ -11,7 +11,7 @@ public interface Subscriber {
    * [getId description]
    * @return [description]
    */
-  public String getId();
+  public String getName();
 
   /**
    *

@@ -41,16 +41,16 @@ public class Dispatcher {
 
     for (Subscriber subscriber : subscribers) {
       if (subscriber.isTerminated()) {
-        result.error(subscriber.getId(), TerminatedError);
+        result.error(subscriber.getName(), TerminatedError);
         subscribers.remove(subscriber);
       } else if (!subscriber.isActive()) {
-        result.error(subscriber.getId(), InactiveError);
+        result.error(subscriber.getName(), InactiveError);
       } else {
         boolean success = subscriber.receive(event);
         if (!success) { // fix here, more elaborate return values
-          result.error(subscriber.getId(), SomeOtherError.withMessage("Receive returned false"));
+          result.error(subscriber.getName(), SomeOtherError.withMessage("Receive returned false"));
         }
-        result.success(subscriber.getId());
+        result.success(subscriber.getName());
       }
     }
     return result;

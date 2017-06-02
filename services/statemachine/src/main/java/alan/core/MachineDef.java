@@ -1,6 +1,6 @@
 package alan.core;
 
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.Set;
 
 import alan.core.Schema;
@@ -14,6 +14,6 @@ public interface MachineDef<S, SMC, T extends Tape> {
   public Schema<T> getSchema();
   public Set<Class<?>> getEventTypes();
   public ExecutionId getExecutionId(Object event);
-  public Machine createMachine(ExecutionId id, TapeLog<T> tapeLog, ExecutorService executor);
-  public ExecutorService createExecutorService();
+  public Machine createMachine(ExecutionId id, TapeLog<T> tapeLog, Executor executor);
+  public Executor createExecutor();
 }

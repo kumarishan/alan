@@ -2,7 +2,7 @@ package alan.core;
 
 import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.RecursiveAction;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -51,7 +51,7 @@ public class MachineExecutor<S, SMC, T extends Tape> {
   private final ScheduledThreadPoolExecutor scheduler;
 
   // executor service used by state machine internally if any
-  protected final ExecutorService exectorService;
+  protected final Executor exectorService;
 
   private TapeLog<T> tapeLog;
 
@@ -73,7 +73,7 @@ public class MachineExecutor<S, SMC, T extends Tape> {
 
     this.maxWaitForAction = maxWaitForAction;
     this.machineDef = machineDef;
-    this.exectorService = machineDef.createExecutorService();
+    this.exectorService = machineDef.createExecutor();
     this.taskQueue = new LinkedBlockingQueue<>();
     this.forkJoinPool = new ForkJoinPool(parallelism * ASYNC_TASK_PER_EXECUTION,
                                         ForkJoinPool. defaultForkJoinWorkerThreadFactory,
@@ -97,7 +97,7 @@ public class MachineExecutor<S, SMC, T extends Tape> {
    * [getStateMachineId description]
    * @return [description]
    */
-  public final String getStateMachineId() {
+  public final String getName() {
     return machineDef.getName();
   }
 

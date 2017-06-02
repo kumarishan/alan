@@ -1,6 +1,6 @@
 package alan.statemachine;
 
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 
 
 /**
@@ -10,14 +10,14 @@ public final class StateActionContext<S, SC, SMC> {
   private final S state;
   private SC stateContext;
   private SMC stateMachineContext;
-  private final ExecutorService executorService;
+  private final Executor executor;
   private final StateMachineDef<S, SMC> stateMachineDef;
 
-  StateActionContext(S state, SC stateContext, SMC stateMachineContext, ExecutorService executorService, StateMachineDef<S, SMC> stateMachineDef) {
+  StateActionContext(S state, SC stateContext, SMC stateMachineContext, Executor executor, StateMachineDef<S, SMC> stateMachineDef) {
     this.state = state;
     this.stateContext = stateContext;
     this.stateMachineContext = stateMachineContext;
-    this.executorService = executorService;
+    this.executor = executor;
     this.stateMachineDef = stateMachineDef;
   }
 
@@ -85,11 +85,11 @@ public final class StateActionContext<S, SC, SMC> {
   }
 
   /**
-   * [withExecutorService description]
+   * [withExecutor description]
    * @param  service [description]
    * @return         [description]
    */
-  public StateActionContext<S, SC, SMC> copy(ExecutorService service) {
-    return new StateActionContext<>(state, stateContext, stateMachineContext, service, stateMachineDef);
+  public StateActionContext<S, SC, SMC> copy(Executor executor) {
+    return new StateActionContext<>(state, stateContext, stateMachineContext, executor, stateMachineDef);
   }
 }

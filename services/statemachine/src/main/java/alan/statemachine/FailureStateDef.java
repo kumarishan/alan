@@ -2,7 +2,7 @@ package alan.statemachine;
 
 import java.util.function.Function;
 import java.util.function.BiFunction;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.concurrent.CompletableFuture;
 
 import alan.util.FI.TriFunction;
@@ -15,7 +15,7 @@ class FailureStateDef<S, SMC, R> implements SinkStateDef<S, R> {
 
   private final S state;
   private final Class<R> resultType;
-  private final TriFunction<SMC, Throwable, ExecutorService, CompletableFuture<R>> asyncAction;
+  private final TriFunction<SMC, Throwable, Executor, CompletableFuture<R>> asyncAction;
   private final BiFunction<SMC, Throwable, R> action;
 
   public FailureStateDef(S state, Class<R> resultType, BiFunction<SMC, Throwable, R> action) {
@@ -25,7 +25,7 @@ class FailureStateDef<S, SMC, R> implements SinkStateDef<S, R> {
     this.action = action;
   }
 
-  public FailureStateDef(S state, Class<R> resultType, TriFunction<SMC, Throwable, ExecutorService, CompletableFuture<R>> asyncAction) {
+  public FailureStateDef(S state, Class<R> resultType, TriFunction<SMC, Throwable, Executor, CompletableFuture<R>> asyncAction) {
     this.state = state;
     this.resultType = resultType;
     this.asyncAction = asyncAction;
@@ -59,7 +59,7 @@ class FailureStateDef<S, SMC, R> implements SinkStateDef<S, R> {
    * [getAsyncAction description]
    * @return [description]
    */
-  public TriFunction<SMC, Throwable, ExecutorService, CompletableFuture<R>> getAsyncAction() {
+  public TriFunction<SMC, Throwable, Executor, CompletableFuture<R>> getAsyncAction() {
     return asyncAction;
   }
 
